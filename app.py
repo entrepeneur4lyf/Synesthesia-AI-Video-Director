@@ -1318,6 +1318,15 @@ css = """
 }
 .header-row {
     align-items: center !important;
+    gap: 12px !important;
+    padding: 0 !important;
+    margin-bottom: 0 !important;
+}
+.header-row > div {
+    flex-grow: 0 !important;
+}
+.header-row > div:last-child {
+    flex-grow: 1 !important;
 }
 """
 
@@ -1325,7 +1334,7 @@ with gr.Blocks(title="Synesthesia AI Video Director", theme=gr.themes.Default(),
     pm_state = gr.State(ProjectManager()) 
     
     with gr.Row(elem_classes="header-row"):
-        gr.Image(value="Synesthesiatransparent.png", show_label=False, container=False, height=80, min_width=160)
+        gr.HTML('<img src="file/Synesthesiatransparent.png" style="height:80px;width:auto;">')
         gr.Markdown("# Synesthesia AI Video Director")
     current_proj_var = gr.State("")
     
