@@ -19,6 +19,7 @@ import glob
 import io
 import copy
 import subprocess
+import base64
 import keyboard  # Requires: pip install keyboard
 
 # ==========================================
@@ -234,6 +235,22 @@ load_global_url_settings()
 # ==========================================
 # SYSTEM UTILITIES
 # ==========================================
+
+def get_base64_image(image_path):
+    with open(image_path, "rb") as img_file:
+        return base64.b64encode(img_file.read()).decode('utf-8')
+
+logo_base64 = get_base64_image("Synesthesiatransparent.png")
+
+# We combine the logo and title into one flexbox div with a hardcoded min-width
+header_html = f'''
+<div style="display: flex; align-items: center; gap: 15px;">
+    <img src="data:image/png;base64,{logo_base64}" style="height: 80px; min-width: 80px; object-fit: contain;">
+    <h1 style="margin: 0; padding-bottom: 5px;">Synesthesia AI Video Director</h1>
+</div>
+'''
+
+logo_base64 = get_base64_image("Synesthesiatransparent.png")
 
 def get_file_path(file_obj):
     """Safely extracts a file path from a Gradio file component."""
@@ -1333,11 +1350,10 @@ css = """
 with gr.Blocks(title="Synesthesia AI Video Director", theme=gr.themes.Default(), css=css) as app:
     pm_state = gr.State(ProjectManager()) 
     
-    with gr.Row(elem_classes="header-row"):
-        gr.HTML('<img src="file/Synesthesiatransparent.png" style="height:80px;width:auto;">')
-        gr.Markdown("# Synesthesia AI Video Director")
+    with gr.Row():
+        gr.HTML(header_html)
+        
     current_proj_var = gr.State("")
-    
 # --- TAB 1: SETUP ---
     with gr.Tab("1. Project & Assets"):
         gr.Markdown("### Create or Load")
