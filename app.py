@@ -53,10 +53,9 @@ REQUIRED_COLUMNS = [
 ]
 
 RESOLUTION_MAP = {
-    "540p": (960, 540),
-    "720p": (1280, 720),
-    "1080p": (1920, 1080),
-    "1440p": (2560, 1440)
+    "540p": (960, 512),
+    "720p": (1280, 704),
+    "1080p": (1920, 1088)
 }
 
 DEFAULT_CONCEPT_PROMPT = (
@@ -1523,7 +1522,7 @@ with gr.Blocks(title="Synesthesia AI Video Director", theme=gr.themes.Default(),
         with gr.Row():
             vid_gen_mode_dropdown = gr.Dropdown(choices=["Generate Remaining Shots", "Regenerate all Shots", "Generate all Action Shots", "Generate all Vocal Shots"], value="Generate Remaining Shots", label="Generation Mode")
             vid_versions_dropdown = gr.Dropdown(choices=[1, 2, 3, 4, 5], value=1, label="Versions per Shot")
-            vid_resolution_dropdown = gr.Dropdown(choices=["540p", "720p", "1080p", "1440p"], value="1080p", label="Resolution")
+            vid_resolution_dropdown = gr.Dropdown(choices=["540p", "720p", "1080p"], value="1080p", label="Resolution")
             vid_vocal_prompt_mode = gr.Dropdown(choices=["Use Singer/Band Description", "Use Storyboard Prompt"], value="Use Singer/Band Description", label="Vocal Shot Prompt Mode")
             vid_gen_start_btn = gr.Button("Start Batch Generation", variant="primary")
             vid_gen_stop_btn = gr.Button("Stop Batch Generation", variant="stop", visible=False)
@@ -2008,7 +2007,7 @@ Select a **Generation Mode**:
 - *Generate all Action Shots* / *Generate all Vocal Shots* — target one shot type
 - *Regenerate all Shots* — delete all existing videos and regenerate from scratch
 
-Set how many **Versions per Shot** to generate (1–5). Having multiple versions gives you options to compare in Tab 4. Choose your **Resolution** (540p → 1440p). Click *Start Batch Generation* to begin. Click *Stop Batch Generation* to halt after the current shot finishes.
+Set how many **Versions per Shot** to generate (1–5). Having multiple versions gives you options to compare in Tab 4. Choose your **Resolution** (540p → 1080p). Click *Start Batch Generation* to begin. Click *Stop Batch Generation* to halt after the current shot finishes.
 
 **Vocal Shot Prompt Mode** controls which prompt drives video generation for Vocal shots:
 - *Use Singer/Band Description* — uses the performer/venue description from Tab 2
