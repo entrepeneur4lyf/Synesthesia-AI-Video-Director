@@ -173,6 +173,39 @@ User suggested plot concept:
 Shot list:
 {shot_list}"""
 
+# ==========================================
+# DEFAULT LLM PROMPT TEMPLATES
+# ==========================================
+
+# --- Plot Generation ---
+DEFAULT_PLOT_SYSTEM_PROMPT_MUSIC = "You are a creative writer for music videos."
+DEFAULT_PLOT_USER_TEMPLATE_MUSIC = (
+    "Rough Concept: {concept}\n\nLyrics:\n{lyrics}\n\nTimeline:\n{timeline}\n\n"
+    "Task: Write a cohesive linear plot summary for this video (max 300 words)."
+)
+DEFAULT_PLOT_SYSTEM_PROMPT_SCRIPTED = "You are a creative writer for short narrative films."
+DEFAULT_PLOT_USER_TEMPLATE_SCRIPTED = (
+    "Rough Concept: {concept}\n\n"
+    "Task: Write a cohesive linear plot summary for this short narrative film (max 300 words). "
+    "Focus on character arcs, settings, and dramatic moments."
+)
+
+# --- Performance Description ---
+DEFAULT_PERF_SYSTEM_PROMPT_MUSIC = "You are a casting director and set designer."
+DEFAULT_PERF_USER_TEMPLATE_MUSIC = (
+    "Concept: {concept}\nPlot: {plot}\n{gender_instruction}\n"
+    "Task: Describe the physical appearance and style of the lead singer, specifically for an AI video generation model. "
+    "Start with the phrase 'Handheld dynamic closeup shot of'. Do not include any details about the character that would be "
+    "out of view in a close-up shot. Keep it concise (2-3 sentences)."
+)
+DEFAULT_PERF_SYSTEM_PROMPT_SCRIPTED = "You are a casting director and set designer for short films."
+DEFAULT_PERF_USER_TEMPLATE_SCRIPTED = (
+    "Concept: {concept}\nPlot: {plot}\n{gender_instruction}\n"
+    "Task: Describe the main character's physical appearance, style, and the primary setting/location, "
+    "specifically for an AI video generation model. Include build, face, hair, clothing, and setting details. "
+    "Keep it concise (3-4 sentences)."
+)
+
 # Global cache for ffprobe frame counts to speed up preview loading in Tab 3
 FRAME_COUNT_CACHE = {}
 
@@ -753,24 +786,21 @@ def build_simple_timeline(total_duration, shot_type, shot_mode, min_dur, max_dur
     pm.save_data()
     return pm.df
 
-def generate_overarching_plot(concept, lyrics, llm_model, pm, video_mode="Intercut"):
+def generate_overarching_plot(concept, lyrics, llm_model, pm, video_mode="Intercut",
+                              plot_sys_music="", plot_user_music="",
+                              plot_sys_scripted="", plot_user_scripted=""):
     yield "⏳ Generating overarching plot... (Please wait)"
     llm = LLMBridge()
     df = pm.df
 
     if video_mode == "Scripted":
-        # Scripted mode: use concept/character info, no lyrics needed, timeline optional
-        sys_prompt = "You are a creative writer for short narrative films."
-        user_prompt = (
-            f"Rough Concept: {concept}\n\n"
-            "Task: Write a cohesive linear plot summary for this short narrative film (max 300 words). "
-            "Focus on character arcs, settings, and dramatic moments."
-        )
+        sys_prompt = plot_sys_scripted.strip() if plot_sys_scripted and plot_sys_scripted.strip() else DEFAULT_PLOT_SYSTEM_PROMPT_SCRIPTED
+        template = plot_user_scripted.strip() if plot_user_scripted and plot_user_scripted.strip() else DEFAULT_PLOT_USER_TEMPLATE_SCRIPTED
+        timeline_str = ""
         if not df.empty:
-            timeline_str = ""
             for idx, row in df.iterrows():
                 timeline_str += f"[{row['Start_Time']:.2f}s - {row['End_Time']:.2f}s: Shot]\n"
-            user_prompt += f"\n\nTimeline:\n{timeline_str}"
+        user_prompt = template.format(concept=concept, timeline=timeline_str)
         yield llm.query(sys_prompt, user_prompt, llm_model)
         return
 
@@ -784,41 +814,33 @@ def generate_overarching_plot(concept, lyrics, llm_model, pm, video_mode="Interc
         if row['Type'] == 'Vocal':
             timeline_str += f"[{row['Start_Time']:.2f}s - {row['End_Time']:.2f}s: SINGING]\n"
 
-    sys_prompt = "You are a creative writer for music videos."
-    user_prompt = (
-        f"Rough Concept: {concept}\n\nLyrics:\n{lyrics}\n\nTimeline:\n{timeline_str}\n\n"
-        "Task: Write a cohesive linear plot summary for this video (max 300 words)."
-    )
+    sys_prompt = plot_sys_music.strip() if plot_sys_music and plot_sys_music.strip() else DEFAULT_PLOT_SYSTEM_PROMPT_MUSIC
+    template = plot_user_music.strip() if plot_user_music and plot_user_music.strip() else DEFAULT_PLOT_USER_TEMPLATE_MUSIC
+    user_prompt = template.format(concept=concept, lyrics=lyrics, timeline=timeline_str)
     yield llm.query(sys_prompt, user_prompt, llm_model)
 
-def generate_performance_description(concept, plot, gender, llm_model, video_mode="Intercut"):
+def generate_performance_description(concept, plot, gender, llm_model, video_mode="Intercut",
+                                     perf_sys_music="", perf_user_music="",
+                                     perf_sys_scripted="", perf_user_scripted=""):
     yield "⏳ Generating description... (Please wait)"
     llm = LLMBridge()
 
     if video_mode == "Scripted":
-        sys_prompt = "You are a casting director and set designer for short films."
+        sys_prompt = perf_sys_scripted.strip() if perf_sys_scripted and perf_sys_scripted.strip() else DEFAULT_PERF_SYSTEM_PROMPT_SCRIPTED
+        template = perf_user_scripted.strip() if perf_user_scripted and perf_user_scripted.strip() else DEFAULT_PERF_USER_TEMPLATE_SCRIPTED
         gender_instruction = f"Main Character's Gender: {gender}\n" if gender and gender.strip() else "Main Character's Gender: Please invent a gender.\n"
-        user_prompt = (
-            f"Concept: {concept}\nPlot: {plot}\n{gender_instruction}\n"
-            "Task: Describe the main character's physical appearance, style, and the primary setting/location, "
-            "specifically for an AI video generation model. Include build, face, hair, clothing, and setting details. "
-            "Keep it concise (3-4 sentences)."
-        )
+        user_prompt = template.format(concept=concept, plot=plot, gender_instruction=gender_instruction)
         yield llm.query(sys_prompt, user_prompt, llm_model)
         return
 
-    sys_prompt = "You are a casting director and set designer."
-    
+    sys_prompt = perf_sys_music.strip() if perf_sys_music and perf_sys_music.strip() else DEFAULT_PERF_SYSTEM_PROMPT_MUSIC
+    template = perf_user_music.strip() if perf_user_music and perf_user_music.strip() else DEFAULT_PERF_USER_TEMPLATE_MUSIC
     gender_instruction = f"Singer Gender: {gender}\n" if gender and gender.strip() else "Singer Gender: Please invent a gender for the singer.\n"
-    
-    user_prompt = (
-        f"Concept: {concept}\nPlot: {plot}\n{gender_instruction}\n"
-        "Task: Describe the physical appearance and style of the lead singer, specifically for an AI video generation model. Start with the phrase 'Handheld dynamic closeup shot of'.  Do not include any details about the character that would be out of view in a close-up shot. "
-        "Keep it concise (2-3 sentences)."
-    )
+    user_prompt = template.format(concept=concept, plot=plot, gender_instruction=gender_instruction)
     yield llm.query(sys_prompt, user_prompt, llm_model)
 
-def generate_concepts_logic(overarching_plot, llm_model, rough_concept, performance_desc, pm, video_mode="Intercut", gender=""):
+def generate_concepts_logic(overarching_plot, llm_model, rough_concept, performance_desc, pm, video_mode="Intercut", gender="",
+                            bulk_template="", vocals_template="", scripted_template=""):
     llm = LLMBridge()
     df = pm.df
     pm.stop_generation = False
@@ -834,7 +856,8 @@ def generate_concepts_logic(overarching_plot, llm_model, rough_concept, performa
     sys_prompt = "You are an expert AI video prompt generator. Only output valid CSV data."
 
     if video_mode == "Scripted":
-        user_prompt = SCRIPTED_PROMPT_TEMPLATE.format(
+        tmpl = scripted_template.strip() if scripted_template and scripted_template.strip() else SCRIPTED_PROMPT_TEMPLATE
+        user_prompt = tmpl.format(
             gender=gender if gender and gender.strip() else "Not specified",
             character_desc=performance_desc if performance_desc else "Not specified",
             concept=overarching_plot if overarching_plot else rough_concept if rough_concept else "None provided.",
@@ -842,7 +865,8 @@ def generate_concepts_logic(overarching_plot, llm_model, rough_concept, performa
         )
     elif video_mode == "All Vocals":
         lyrics = pm.get_lyrics()
-        user_prompt = ALL_VOCALS_PROMPT_TEMPLATE.format(
+        tmpl = vocals_template.strip() if vocals_template and vocals_template.strip() else ALL_VOCALS_PROMPT_TEMPLATE
+        user_prompt = tmpl.format(
             lyrics=lyrics if lyrics else "None provided.",
             plot=overarching_plot if overarching_plot else rough_concept if rough_concept else "None provided.",
             performance_desc=performance_desc if performance_desc else "Not specified.",
@@ -851,7 +875,8 @@ def generate_concepts_logic(overarching_plot, llm_model, rough_concept, performa
     else:
         # Intercut and All Action use the standard bulk template
         lyrics = pm.get_lyrics()
-        user_prompt = BULK_PROMPT_TEMPLATE.format(
+        tmpl = bulk_template.strip() if bulk_template and bulk_template.strip() else BULK_PROMPT_TEMPLATE
+        user_prompt = tmpl.format(
             lyrics=lyrics if lyrics else "None provided.",
             plot=overarching_plot if overarching_plot else rough_concept if rough_concept else "None provided.",
             shot_list=shot_list_csv
@@ -1421,8 +1446,38 @@ with gr.Blocks(title="Synesthesia AI Video Director", theme=gr.themes.Default(),
             gen_plot_btn = gr.Button("2. Generate Overarching Plot")
             plot_out = gr.Textbox(label="Overarching Plot (Optional)", lines=4, interactive=True)
             
-            with gr.Accordion("Advanced: Single Prompt Fallback Template (Used in Tab 3)", open=False):
-                prompt_template_in = gr.Textbox(value=DEFAULT_CONCEPT_PROMPT, label="Action Shot Prompt Template", lines=4)
+            with gr.Accordion("Advanced: LLM Prompt Templates", open=False):
+                gr.Markdown("Customize the prompts sent to the local LLM for each generation step. "
+                            "Templates use `{placeholder}` syntax for dynamic values.")
+                reset_templates_btn = gr.Button("Reset All Templates to Defaults")
+
+                with gr.Accordion("Plot Generation Template", open=False):
+                    plot_sys_prompt_in = gr.Textbox(value=DEFAULT_PLOT_SYSTEM_PROMPT_MUSIC, label="System Prompt (Music Video Mode)", lines=2)
+                    plot_user_template_in = gr.Textbox(value=DEFAULT_PLOT_USER_TEMPLATE_MUSIC, label="User Prompt Template (Music Video Mode)", lines=4)
+                    gr.Markdown("*Placeholders: `{concept}`, `{lyrics}`, `{timeline}`*")
+                    plot_sys_prompt_scripted_in = gr.Textbox(value=DEFAULT_PLOT_SYSTEM_PROMPT_SCRIPTED, label="System Prompt (Scripted Mode)", lines=2)
+                    plot_user_template_scripted_in = gr.Textbox(value=DEFAULT_PLOT_USER_TEMPLATE_SCRIPTED, label="User Prompt Template (Scripted Mode)", lines=4)
+                    gr.Markdown("*Placeholders: `{concept}`, `{timeline}`*")
+
+                with gr.Accordion("Performance Description Template", open=False):
+                    perf_sys_prompt_in = gr.Textbox(value=DEFAULT_PERF_SYSTEM_PROMPT_MUSIC, label="System Prompt (Music Video Mode)", lines=2)
+                    perf_user_template_in = gr.Textbox(value=DEFAULT_PERF_USER_TEMPLATE_MUSIC, label="User Prompt Template (Music Video Mode)", lines=4)
+                    gr.Markdown("*Placeholders: `{concept}`, `{plot}`, `{gender_instruction}`*")
+                    perf_sys_prompt_scripted_in = gr.Textbox(value=DEFAULT_PERF_SYSTEM_PROMPT_SCRIPTED, label="System Prompt (Scripted Mode)", lines=2)
+                    perf_user_template_scripted_in = gr.Textbox(value=DEFAULT_PERF_USER_TEMPLATE_SCRIPTED, label="User Prompt Template (Scripted Mode)", lines=4)
+                    gr.Markdown("*Placeholders: `{concept}`, `{plot}`, `{gender_instruction}`*")
+
+                with gr.Accordion("Video Prompt Generation Template (Bulk)", open=False):
+                    concepts_bulk_template_in = gr.Textbox(value=BULK_PROMPT_TEMPLATE, label="Intercut / All Action Template", lines=6)
+                    gr.Markdown("*Placeholders: `{lyrics}`, `{plot}`, `{shot_list}`*")
+                    concepts_vocals_template_in = gr.Textbox(value=ALL_VOCALS_PROMPT_TEMPLATE, label="All Vocals Template", lines=6)
+                    gr.Markdown("*Placeholders: `{lyrics}`, `{plot}`, `{performance_desc}`, `{shot_list}`*")
+                    concepts_scripted_template_in = gr.Textbox(value=SCRIPTED_PROMPT_TEMPLATE, label="Scripted Template", lines=6)
+                    gr.Markdown("*Placeholders: `{gender}`, `{character_desc}`, `{concept}`, `{shot_list}`*")
+
+                with gr.Accordion("Single Shot Regeneration Template (Used in Tab 3)", open=False):
+                    prompt_template_in = gr.Textbox(value=DEFAULT_CONCEPT_PROMPT, label="Single Shot Prompt Template", lines=4)
+                    gr.Markdown("*Placeholders: `{plot}`, `{prev_shot}`, `{start}`, `{duration}`, `{type}`*")
             
             with gr.Row():
                 gen_concepts_btn = gr.Button("3. Generate Video Prompts (Bulk Generation)", variant="primary")
@@ -2105,6 +2160,18 @@ Lyrics: [insert lyrics here]
             gr.update(label="Main Character's Gender (Optional)" if is_scripted else "Singer Gender (Optional)"),  # singer_gender_in
             gr.update(label="Main Character and Setting Description" if is_scripted else "Singer, Band, and Venue Description (Also used as Prompt for Vocal Shots)"),  # performance_desc_in
             gr.update(value="Generate Main Character & Setting Desc" if is_scripted else "Generate Singer, Band & Venue Desc"),  # gen_performance_btn
+            # LLM prompt templates
+            settings.get("plot_sys_prompt_music", DEFAULT_PLOT_SYSTEM_PROMPT_MUSIC),
+            settings.get("plot_user_template_music", DEFAULT_PLOT_USER_TEMPLATE_MUSIC),
+            settings.get("plot_sys_prompt_scripted", DEFAULT_PLOT_SYSTEM_PROMPT_SCRIPTED),
+            settings.get("plot_user_template_scripted", DEFAULT_PLOT_USER_TEMPLATE_SCRIPTED),
+            settings.get("perf_sys_prompt_music", DEFAULT_PERF_SYSTEM_PROMPT_MUSIC),
+            settings.get("perf_user_template_music", DEFAULT_PERF_USER_TEMPLATE_MUSIC),
+            settings.get("perf_sys_prompt_scripted", DEFAULT_PERF_SYSTEM_PROMPT_SCRIPTED),
+            settings.get("perf_user_template_scripted", DEFAULT_PERF_USER_TEMPLATE_SCRIPTED),
+            settings.get("concepts_bulk_template", BULK_PROMPT_TEMPLATE),
+            settings.get("concepts_vocals_template", ALL_VOCALS_PROMPT_TEMPLATE),
+            settings.get("concepts_scripted_template", SCRIPTED_PROMPT_TEMPLATE),
         )
 
     def handle_delete_project(name, pm):
@@ -2133,7 +2200,10 @@ Lyrics: [insert lyrics here]
             if v_src: pm.save_asset(v_src, "vocals.mp3")
             if s_src: pm.save_asset(s_src, "full_song.mp3")
 
-    def auto_save_tab2(proj_name, min_sil, sil_thresh, mode, min_d, max_d, llm, concept, plot, template, performance_d, video_mode, s_total_dur, s_shot_count, pm):
+    def auto_save_tab2(proj_name, min_sil, sil_thresh, mode, min_d, max_d, llm, concept, plot, template, performance_d, video_mode, s_total_dur, s_shot_count, pm,
+                       p_sys_m, p_user_m, p_sys_s, p_user_s,
+                       pf_sys_m, pf_user_m, pf_sys_s, pf_user_s,
+                       c_bulk, c_vocals, c_scripted):
         if proj_name:
             pm.current_project = proj_name
             settings = {
@@ -2142,7 +2212,13 @@ Lyrics: [insert lyrics here]
                 "rough_concept": concept, "plot": plot, "prompt_template": template,
                 "performance_desc": performance_d,
                 "video_mode": video_mode,
-                "scripted_total_dur": s_total_dur, "scripted_shot_count": s_shot_count
+                "scripted_total_dur": s_total_dur, "scripted_shot_count": s_shot_count,
+                "plot_sys_prompt_music": p_sys_m, "plot_user_template_music": p_user_m,
+                "plot_sys_prompt_scripted": p_sys_s, "plot_user_template_scripted": p_user_s,
+                "perf_sys_prompt_music": pf_sys_m, "perf_user_template_music": pf_user_m,
+                "perf_sys_prompt_scripted": pf_sys_s, "perf_user_template_scripted": pf_user_s,
+                "concepts_bulk_template": c_bulk, "concepts_vocals_template": c_vocals,
+                "concepts_scripted_template": c_scripted
             }
             pm.save_project_settings(settings)
 
@@ -2166,7 +2242,13 @@ Lyrics: [insert lyrics here]
             vid_gallery, vid_gen_start_btn,
             video_mode_drp, scripted_total_dur, scripted_shot_count,
             min_silence_sl, silence_thresh_sl, scripted_duration_row, scan_btn,
-            singer_gender_in, performance_desc_in, gen_performance_btn
+            singer_gender_in, performance_desc_in, gen_performance_btn,
+            # LLM prompt templates
+            plot_sys_prompt_in, plot_user_template_in,
+            plot_sys_prompt_scripted_in, plot_user_template_scripted_in,
+            perf_sys_prompt_in, perf_user_template_in,
+            perf_sys_prompt_scripted_in, perf_user_template_scripted_in,
+            concepts_bulk_template_in, concepts_vocals_template_in, concepts_scripted_template_in
         ]
     )
 
@@ -2178,13 +2260,37 @@ Lyrics: [insert lyrics here]
         file_comp.upload(auto_save_files, inputs=[current_proj_var, vocals_up, song_up, pm_state])
         file_comp.clear(auto_save_files, inputs=[current_proj_var, vocals_up, song_up, pm_state])
         
-    t2_inputs = [current_proj_var, min_silence_sl, silence_thresh_sl, shot_mode_drp, min_shot_dur, max_shot_dur, llm_dropdown, rough_concept_in, plot_out, prompt_template_in, performance_desc_in, video_mode_drp, scripted_total_dur, scripted_shot_count, pm_state]
+    t2_inputs = [current_proj_var, min_silence_sl, silence_thresh_sl, shot_mode_drp, min_shot_dur, max_shot_dur, llm_dropdown, rough_concept_in, plot_out, prompt_template_in, performance_desc_in, video_mode_drp, scripted_total_dur, scripted_shot_count, pm_state,
+                 plot_sys_prompt_in, plot_user_template_in, plot_sys_prompt_scripted_in, plot_user_template_scripted_in,
+                 perf_sys_prompt_in, perf_user_template_in, perf_sys_prompt_scripted_in, perf_user_template_scripted_in,
+                 concepts_bulk_template_in, concepts_vocals_template_in, concepts_scripted_template_in]
 
     for tab2_comp in [min_silence_sl, silence_thresh_sl, shot_mode_drp, min_shot_dur, max_shot_dur, llm_dropdown, video_mode_drp, scripted_total_dur, scripted_shot_count]:
         tab2_comp.change(auto_save_tab2, inputs=t2_inputs)
 
-    for tab2_text_comp in [rough_concept_in, plot_out, prompt_template_in, performance_desc_in]:
+    for tab2_text_comp in [rough_concept_in, plot_out, prompt_template_in, performance_desc_in,
+                           plot_sys_prompt_in, plot_user_template_in, plot_sys_prompt_scripted_in, plot_user_template_scripted_in,
+                           perf_sys_prompt_in, perf_user_template_in, perf_sys_prompt_scripted_in, perf_user_template_scripted_in,
+                           concepts_bulk_template_in, concepts_vocals_template_in, concepts_scripted_template_in]:
         tab2_text_comp.blur(auto_save_tab2, inputs=t2_inputs)
+
+    def reset_templates():
+        return (
+            DEFAULT_PLOT_SYSTEM_PROMPT_MUSIC, DEFAULT_PLOT_USER_TEMPLATE_MUSIC,
+            DEFAULT_PLOT_SYSTEM_PROMPT_SCRIPTED, DEFAULT_PLOT_USER_TEMPLATE_SCRIPTED,
+            DEFAULT_PERF_SYSTEM_PROMPT_MUSIC, DEFAULT_PERF_USER_TEMPLATE_MUSIC,
+            DEFAULT_PERF_SYSTEM_PROMPT_SCRIPTED, DEFAULT_PERF_USER_TEMPLATE_SCRIPTED,
+            BULK_PROMPT_TEMPLATE, ALL_VOCALS_PROMPT_TEMPLATE, SCRIPTED_PROMPT_TEMPLATE,
+            DEFAULT_CONCEPT_PROMPT
+        )
+    reset_templates_btn.click(reset_templates, outputs=[
+        plot_sys_prompt_in, plot_user_template_in,
+        plot_sys_prompt_scripted_in, plot_user_template_scripted_in,
+        perf_sys_prompt_in, perf_user_template_in,
+        perf_sys_prompt_scripted_in, perf_user_template_scripted_in,
+        concepts_bulk_template_in, concepts_vocals_template_in, concepts_scripted_template_in,
+        prompt_template_in
+    ])
 
     def on_mode_change(mode):
         is_scripted = (mode == "Scripted")
@@ -2296,10 +2402,10 @@ Lyrics: [insert lyrics here]
 
     scan_btn.click(run_scan, inputs=[vocals_up, current_proj_var, min_silence_sl, silence_thresh_sl, shot_mode_drp, min_shot_dur, max_shot_dur, video_mode_drp, scripted_total_dur, scripted_shot_count, pm_state], outputs=[scan_status, shot_table])
     
-    gen_performance_btn.click(generate_performance_description, inputs=[rough_concept_in, plot_out, singer_gender_in, llm_dropdown, video_mode_drp], outputs=performance_desc_in)
-    gen_plot_btn.click(generate_overarching_plot, inputs=[rough_concept_in, lyrics_in, llm_dropdown, pm_state, video_mode_drp], outputs=plot_out)
+    gen_performance_btn.click(generate_performance_description, inputs=[rough_concept_in, plot_out, singer_gender_in, llm_dropdown, video_mode_drp, perf_sys_prompt_in, perf_user_template_in, perf_sys_prompt_scripted_in, perf_user_template_scripted_in], outputs=performance_desc_in)
+    gen_plot_btn.click(generate_overarching_plot, inputs=[rough_concept_in, lyrics_in, llm_dropdown, pm_state, video_mode_drp, plot_sys_prompt_in, plot_user_template_in, plot_sys_prompt_scripted_in, plot_user_template_scripted_in], outputs=plot_out)
 
-    gen_concepts_btn.click(generate_concepts_logic, inputs=[plot_out, llm_dropdown, rough_concept_in, performance_desc_in, pm_state, video_mode_drp, singer_gender_in], outputs=[shot_table, concept_gen_status])
+    gen_concepts_btn.click(generate_concepts_logic, inputs=[plot_out, llm_dropdown, rough_concept_in, performance_desc_in, pm_state, video_mode_drp, singer_gender_in, concepts_bulk_template_in, concepts_vocals_template_in, concepts_scripted_template_in], outputs=[shot_table, concept_gen_status])
     stop_concepts_btn.click(stop_gen, inputs=[pm_state], outputs=[concept_gen_status]) 
 
     # Dynamic UI Refresh Event
