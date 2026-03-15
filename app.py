@@ -980,7 +980,7 @@ def get_project_renders(pm):
         render_paths.append(f)
         # Try to extract a thumbnail frame using ffmpeg
         try:
-            thumb_path = os.path.join(renders_dir, f".thumb_{fname}.jpg")
+            thumb_path = os.path.join(renders_dir, f"thumb_{fname}.jpg")
             if not os.path.exists(thumb_path):
                 subprocess.run(
                     ["ffmpeg", "-y", "-i", f, "-ss", "1", "-vframes", "1", "-q:v", "5", thumb_path],
@@ -1502,7 +1502,7 @@ with gr.Blocks(title="Synesthesia AI Video Director", theme=gr.themes.Default(),
         shot_table = gr.Dataframe(headers=REQUIRED_COLUMNS, interactive=True, wrap=True, type="pandas")
 
 # --- TAB 3: VIDEO GENERATION ---
-    with gr.Tab("3. Video Generation"):
+    with gr.Tab("3. Video Generation") as tab3_ui:
         selected_vid_path = gr.State("")
         
         with gr.Row():
@@ -1518,7 +1518,6 @@ with gr.Blocks(title="Synesthesia AI Video Director", theme=gr.themes.Default(),
         gr.Markdown("### 🎯 Single Shot Generation")
         with gr.Row():
             single_shot_dropdown = gr.Dropdown(label="Select Shot to Generate", choices=[], interactive=True)
-            refresh_shots_btn = gr.Button("🔄 Refresh Shots", size="sm")
             single_shot_btn = gr.Button("Generate Additional Version", variant="primary")
         single_shot_prompt_edit = gr.Textbox(label="Edit Video Prompt for Selected Shot", lines=3, interactive=True)
         single_shot_status = gr.Textbox(label="Single Shot Status", interactive=False)
@@ -1563,10 +1562,10 @@ with gr.Blocks(title="Synesthesia AI Video Director", theme=gr.themes.Default(),
                 fpath = gal_data[evt.index][0]
                 fname = os.path.basename(fpath)
                 shot_id = fname.split('_')[0] if '_' in fname else "Unknown"
-                return fpath, shot_id, fpath 
-            return None, "", ""
+                return fpath, shot_id, fpath, gr.update(value=shot_id)
+            return None, "", "", gr.update()
 
-        vid_gallery.select(on_vid_gallery_select, inputs=[current_proj_var, pm_state], outputs=[vid_large_view, sel_shot_info_vid, selected_vid_path])
+        vid_gallery.select(on_vid_gallery_select, inputs=[current_proj_var, pm_state], outputs=[vid_large_view, sel_shot_info_vid, selected_vid_path, single_shot_dropdown])
         
         start_vid_evt = vid_gen_start_btn.click(
             lambda: (gr.update(visible=False), gr.update(visible=True)), outputs=[vid_gen_start_btn, vid_gen_stop_btn]
@@ -1585,8 +1584,6 @@ with gr.Blocks(title="Synesthesia AI Video Director", theme=gr.themes.Default(),
         def update_single_shot_choices(pm):
             if pm.df.empty: return gr.update(choices=[])
             return gr.update(choices=pm.df['Shot_ID'].dropna().unique().tolist())
-            
-        refresh_shots_btn.click(update_single_shot_choices, inputs=[pm_state], outputs=[single_shot_dropdown])
 
         def handle_single_shot(shot_id, res, vocal_mode, proj, pm):
             if pm.is_generating:
@@ -1760,6 +1757,7 @@ with gr.Blocks(title="Synesthesia AI Video Director", theme=gr.themes.Default(),
             assemble_btn = gr.Button("Assemble Final Video (Strictly Videos)", variant="secondary")
             assemble_current_btn = gr.Button("Assemble with Current Assets (Videos > Black Fallback)", variant="primary")
         final_video_out = gr.Video(label="Final Cut")
+        assembly_status = gr.Textbox(label="Assembly Status", interactive=False)
 
         gr.Markdown("---")
         gr.Markdown("### Previous Renders")
@@ -1902,10 +1900,13 @@ with gr.Blocks(title="Synesthesia AI Video Director", theme=gr.themes.Default(),
             result = assemble_video(get_file_path(song_file), resolution, pm, fallback_mode=fallback_mode)
             gallery_data, render_paths = get_project_renders(pm)
             render_choices = [os.path.basename(p) for p in render_paths]
-            return result, gallery_data, render_paths, gr.update(choices=render_choices, value=None)
+            if result and os.path.exists(str(result)):
+                return result, "", gallery_data, render_paths, gr.update(choices=render_choices, value=None)
+            else:
+                return None, str(result), gallery_data, render_paths, gr.update(choices=render_choices, value=None)
 
-        assemble_btn.click(lambda s, res, pm: assemble_and_refresh(s, res, pm, False), inputs=[song_up, vid_resolution_dropdown, pm_state], outputs=[final_video_out, renders_gallery, renders_state, render_select_dropdown])
-        assemble_current_btn.click(lambda s, res, pm: assemble_and_refresh(s, res, pm, True), inputs=[song_up, vid_resolution_dropdown, pm_state], outputs=[final_video_out, renders_gallery, renders_state, render_select_dropdown])
+        assemble_btn.click(lambda s, res, pm: assemble_and_refresh(s, res, pm, False), inputs=[song_up, vid_resolution_dropdown, pm_state], outputs=[final_video_out, assembly_status, renders_gallery, renders_state, render_select_dropdown])
+        assemble_current_btn.click(lambda s, res, pm: assemble_and_refresh(s, res, pm, True), inputs=[song_up, vid_resolution_dropdown, pm_state], outputs=[final_video_out, assembly_status, renders_gallery, renders_state, render_select_dropdown])
 
 # --- TAB 5: SETTINGS ---
     with gr.Tab("5. Settings"):
@@ -2412,6 +2413,7 @@ Lyrics: [insert lyrics here]
 
     # Dynamic UI Refresh Event
     tab2_ui.select(lambda pm: pm.df, inputs=[pm_state], outputs=[shot_table])
+    tab3_ui.select(update_single_shot_choices, inputs=[pm_state], outputs=[single_shot_dropdown])
 
 if __name__ == "__main__":
     try:
@@ -2420,4 +2422,4 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"⚠️ Could not register hotkey 'ctrl+r'. Run script as admin or ensure 'keyboard' module is installed. Error: {e}")
         
-    app.launch()
+    app.launch(allowed_paths=["projects"])
