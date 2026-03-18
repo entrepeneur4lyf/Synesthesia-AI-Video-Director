@@ -64,6 +64,54 @@ RESOLUTION_MAP = {
     "1080p": (1920, 1080)
 }
 
+DEFAULT_NEGATIVE_PROMPT = "blurry, distorted, low quality, artifacts, watermark"
+
+def load_styles():
+    styles_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "styles.json")
+    try:
+        with open(styles_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+STYLES = load_styles()
+STYLE_NAMES = ["None"] + [s["name"] for s in STYLES]
+
+def style_to_slug(style_name):
+    """Convert a style display name to a filename-safe slug.
+    'LTX - Claymation' → 'claymation', 'LTX - Film Noir' → 'film_noir'"""
+    if not style_name or style_name == "None":
+        return None
+    name = re.sub(r'^LTX\s*-\s*', '', style_name, flags=re.IGNORECASE)
+    return re.sub(r'[^a-z0-9]+', '_', name.lower()).strip('_')
+
+def slug_to_style_name(slug):
+    """Reverse lookup slug → display name. Falls back to slug if not found."""
+    for s in STYLES:
+        if style_to_slug(s["name"]) == slug:
+            return s["name"]
+    return slug
+
+def slug_from_filename(fname):
+    """Extract style slug from a video filename, or None if unstyled.
+    'S001_vid_claymation_v1726524982.mp4' → 'claymation'
+    'S001_vid_v1726524982.mp4' → None
+    """
+    match = re.match(r'^[^_]+_vid_(.+)_v\d+\.mp4$', fname)
+    return match.group(1) if match else None
+
+def get_styles_in_videos_dir(pm):
+    """Scan the videos/ dir and return sorted list of style display names present."""
+    vid_dir = pm.get_path("videos")
+    if not vid_dir or not os.path.exists(vid_dir):
+        return []
+    slugs = set()
+    for f in glob.glob(os.path.join(vid_dir, "*.mp4")):
+        slug = slug_from_filename(os.path.basename(f))
+        if slug:
+            slugs.add(slug)
+    return sorted([slug_to_style_name(s) for s in slugs])
+
 DEFAULT_CONCEPT_PROMPT = (
     "Context: The overarching plot is: {plot}\n"
     "Previous Shot Visual: {prev_shot}\n"
@@ -1094,15 +1142,15 @@ def get_video_count_for_shot(shot_id, vid_list):
             count += 1
     return count
 
-def generate_video_for_shot(shot_id, resolution, vocal_mode, pm):
+def generate_video_for_shot(shot_id, resolution, vocal_mode, pm, style=None):
     row_idx = pm.df.index[pm.df['Shot_ID'].astype(str).str.upper() == str(shot_id).upper()].tolist()
     if not row_idx:
         yield None, "Error: Shot not found in timeline."
         return
-        
+
     row = pm.df.loc[row_idx[0]]
     vid_prompt = str(row.get('Video_Prompt', ''))
-    
+
     if row.get('Type') == "Vocal" and vocal_mode == "Use Singer/Band Description":
         settings = pm.load_project_settings()
         perf_desc = settings.get("performance_desc", "")
@@ -1113,13 +1161,21 @@ def generate_video_for_shot(shot_id, resolution, vocal_mode, pm):
         yield None, "Error: Missing Video Prompt."
         return
 
+    negative_prompt = DEFAULT_NEGATIVE_PROMPT
+    style_data = next((s for s in STYLES if s["name"] == style), None) if style and style != "None" else None
+    if style_data:
+        vid_prompt = style_data["prompt"].replace("{prompt}", vid_prompt)
+        negative_prompt = DEFAULT_NEGATIVE_PROMPT + ", " + style_data["negative_prompt"]
+
     print(f"\n🎬 === START VIDEO GENERATION (LTX) ===")
     print(f"🎬 Shot ID: {shot_id} | Type: {row['Type']}")
+    if style_data:
+        print(f"🎨 Style: {style}")
     print(f"🎬 Video Prompt:\n{vid_prompt}\n=================================\n")
 
     payload = {
         "prompt": vid_prompt,
-        "negativePrompt": "blurry, distorted, low quality, artifacts, watermark",
+        "negativePrompt": negative_prompt,
         "model": "pro",
         "resolution": resolution, 
         "aspectRatio": "16:9",
@@ -1200,7 +1256,11 @@ def generate_video_for_shot(shot_id, resolution, vocal_mode, pm):
 
     video_path = result_container['response'].get('video_path')
     if video_path and os.path.exists(video_path):
-        save_name = f"{shot_id}_vid_v{int(time.time())}.mp4"
+        slug = style_to_slug(style) if style and style != "None" else None
+        save_name = (
+            f"{shot_id}_vid_{slug}_v{int(time.time())}.mp4" if slug
+            else f"{shot_id}_vid_v{int(time.time())}.mp4"
+        )
         local_path = os.path.join(pm.get_path("videos"), save_name)
         shutil.copy(video_path, local_path)
         
@@ -1213,7 +1273,7 @@ def generate_video_for_shot(shot_id, resolution, vocal_mode, pm):
         pm.save_data()
         yield None, "Error: Completed but no valid video path returned."
 
-def advanced_batch_video_generation(mode, target_versions, resolution, vocal_mode, pm):
+def advanced_batch_video_generation(mode, target_versions, resolution, vocal_mode, style, pm):
     if pm.is_generating:
         yield [], None, "❌ Error: A generation process is already actively running."
         return
@@ -1271,8 +1331,8 @@ def advanced_batch_video_generation(mode, target_versions, resolution, vocal_mod
                 if pm.stop_video_generation: break
                 
                 new_vid_path = None
-                vid_generator = generate_video_for_shot(shot_id, resolution, vocal_mode, pm)
-                
+                vid_generator = generate_video_for_shot(shot_id, resolution, vocal_mode, pm, style)
+
                 for path, msg in vid_generator:
                     if pm.stop_video_generation: break
                     if path is None:
@@ -1298,20 +1358,39 @@ def advanced_batch_video_generation(mode, target_versions, resolution, vocal_mod
         sync_video_directory(pm)
         pm.is_generating = False
 
-def assemble_video(full_song_path, resolution, pm, fallback_mode=False):
+def assemble_video(full_song_path, resolution, pm, fallback_mode=False, style_filter=None):
     df = pm.df
     clips = []
-    clips_to_close = [] 
+    clips_to_close = []
     if df.empty: return "No shots to assemble."
 
     df = df.sort_values(by="Start_Time")
     expected_cursor = 0.0
-    
+
+    # Resolve the style slug to use for filtering (None = no filter = use Video_Path)
+    filter_slug = None
+    filter_no_style = False
+    if style_filter and style_filter not in (None, "All Styles"):
+        if style_filter == "No Style":
+            filter_no_style = True
+        else:
+            filter_slug = style_to_slug(style_filter)
+
+    def pick_vid_path(row):
+        if filter_slug is not None or filter_no_style:
+            all_paths = [p.strip() for p in str(row.get("All_Video_Paths", "")).split(",") if p.strip()]
+            if filter_no_style:
+                matching = [p for p in all_paths if slug_from_filename(os.path.basename(p)) is None]
+            else:
+                matching = [p for p in all_paths if slug_from_filename(os.path.basename(p)) == filter_slug]
+            return matching[0] if matching else None
+        return row.get('Video_Path')
+
     # Detect target resolution from the first available video clip
     # LTX output resolution varies (multiples of 32, differs with/without audio)
     target_size = None
     for _, r in df.iterrows():
-        vp = r.get('Video_Path')
+        vp = pick_vid_path(r)
         if vp and pd.notna(vp) and os.path.exists(str(vp)):
             try:
                 probe = VideoFileClip(str(vp))
@@ -1324,7 +1403,7 @@ def assemble_video(full_song_path, resolution, pm, fallback_mode=False):
         target_size = RESOLUTION_MAP.get(resolution, (1920, 1080))
 
     for index, row in df.iterrows():
-        vid_path = row.get('Video_Path')
+        vid_path = pick_vid_path(row)
         dur = float(row['Duration'])
         start_time = float(row['Start_Time'])
         snapped_dur = round(dur * 24) / 24 
@@ -1380,8 +1459,13 @@ def assemble_video(full_song_path, resolution, pm, fallback_mode=False):
         
     total_seconds = pm.get_current_total_time()
     time_str = format_time(total_seconds)
-    
-    out_path = os.path.join(pm.get_path("renders"), f"final_cut_{time_str}.mp4")
+
+    style_part = ""
+    if filter_slug:
+        style_part = f"_{filter_slug}"
+    elif filter_no_style:
+        style_part = "_no_style"
+    out_path = os.path.join(pm.get_path("renders"), f"final_cut{style_part}_{time_str}.mp4")
     
     try:
         final.write_videofile(
@@ -1645,6 +1729,7 @@ with gr.Blocks(title="Synesthesia AI Video Director", theme=gr.themes.Default(),
             vid_versions_dropdown = gr.Dropdown(choices=[1, 2, 3, 4, 5], value=1, label="Versions per Shot")
             vid_resolution_dropdown = gr.Dropdown(choices=["540p", "720p", "1080p"], value="1080p", label="Resolution")
             vid_vocal_prompt_mode = gr.Dropdown(choices=["Use Singer/Band Description", "Use Storyboard Prompt"], value="Use Singer/Band Description", label="Vocal Shot Prompt Mode")
+            vid_style_dropdown = gr.Dropdown(choices=STYLE_NAMES, value="None", label="Style")
             vid_gen_start_btn = gr.Button("Start Batch Generation", variant="primary")
             vid_gen_stop_btn = gr.Button("Stop Batch Generation", variant="stop", visible=False)
             
@@ -1706,7 +1791,7 @@ with gr.Blocks(title="Synesthesia AI Video Director", theme=gr.themes.Default(),
         start_vid_evt = vid_gen_start_btn.click(
             lambda: (gr.update(visible=False), gr.update(visible=True)), outputs=[vid_gen_start_btn, vid_gen_stop_btn]
         ).then(
-            advanced_batch_video_generation, inputs=[vid_gen_mode_dropdown, vid_versions_dropdown, vid_resolution_dropdown, vid_vocal_prompt_mode, pm_state], outputs=[vid_gallery, vid_large_view, vid_gen_status], show_progress="hidden"
+            advanced_batch_video_generation, inputs=[vid_gen_mode_dropdown, vid_versions_dropdown, vid_resolution_dropdown, vid_vocal_prompt_mode, vid_style_dropdown, pm_state], outputs=[vid_gallery, vid_large_view, vid_gen_status], show_progress="hidden", concurrency_id="generation", concurrency_limit=1
         ).then(
             lambda: (gr.update(visible=True), gr.update(visible=False)), outputs=[vid_gen_start_btn, vid_gen_stop_btn]
         )
@@ -1723,17 +1808,17 @@ with gr.Blocks(title="Synesthesia AI Video Director", theme=gr.themes.Default(),
             value = shared_shot if shared_shot in choices else None
             return gr.update(choices=choices, value=value), shared_shot
 
-        def handle_single_shot(shot_id, res, vocal_mode, proj, pm):
+        def handle_single_shot(shot_id, res, vocal_mode, style, proj, pm):
             if pm.is_generating:
                 yield get_project_videos(pm, proj), "❌ Error: A generation process is already actively running."
                 return
             if not shot_id:
                 yield get_project_videos(pm, proj), "❌ Error: No shot selected."
                 return
-                
+
             pm.is_generating = True
             try:
-                vid_gen = generate_video_for_shot(shot_id, res, vocal_mode, pm)
+                vid_gen = generate_video_for_shot(shot_id, res, vocal_mode, pm, style)
                 final_path = None
                 for path, msg in vid_gen:
                     if path is None:
@@ -1749,7 +1834,7 @@ with gr.Blocks(title="Synesthesia AI Video Director", theme=gr.themes.Default(),
             finally:
                 pm.is_generating = False
 
-        single_shot_btn.click(handle_single_shot, inputs=[single_shot_dropdown, vid_resolution_dropdown, vid_vocal_prompt_mode, current_proj_var, pm_state], outputs=[vid_gallery, single_shot_status])
+        single_shot_btn.click(handle_single_shot, inputs=[single_shot_dropdown, vid_resolution_dropdown, vid_vocal_prompt_mode, vid_style_dropdown, current_proj_var, pm_state], outputs=[vid_gallery, single_shot_status])
 
         def handle_vid_delete(path_to_del, proj, pm):
             new_gal, _ = delete_video_file(path_to_del, proj, pm)
@@ -1757,21 +1842,21 @@ with gr.Blocks(title="Synesthesia AI Video Director", theme=gr.themes.Default(),
             
         del_vid_btn.click(handle_vid_delete, inputs=[selected_vid_path, current_proj_var, pm_state], outputs=[vid_gallery, vid_large_view, sel_shot_info_vid, selected_vid_path])
 
-        def handle_regen_vid(shot_id_txt, selected_path, resolution, vocal_mode, proj, pm):
+        def handle_regen_vid(shot_id_txt, selected_path, resolution, vocal_mode, style, proj, pm):
             if pm.is_generating:
                 yield gr.update(), gr.update(), "❌ Error: A generation process is already actively running."
                 return
-            if not shot_id_txt: 
+            if not shot_id_txt:
                 yield gr.update(), gr.update(), "❌ No Shot ID selected"
                 return
-                
+
             pm.is_generating = True
             try:
                 if selected_path and os.path.exists(selected_path):
                     try: os.remove(selected_path)
                     except Exception as e: print(f"Could not delete file {selected_path}: {e}")
 
-                vid_generator = generate_video_for_shot(shot_id_txt, resolution, vocal_mode, pm)
+                vid_generator = generate_video_for_shot(shot_id_txt, resolution, vocal_mode, pm, style)
                 final_path = None
                 for path, msg in vid_generator:
                     if path is None:
@@ -1787,7 +1872,7 @@ with gr.Blocks(title="Synesthesia AI Video Director", theme=gr.themes.Default(),
             finally:
                 pm.is_generating = False
 
-        def handle_regen_vid_and_prompt(shot_id_txt, selected_path, resolution, vocal_mode, proj, pm):
+        def handle_regen_vid_and_prompt(shot_id_txt, selected_path, resolution, vocal_mode, style, proj, pm):
             if pm.is_generating:
                 yield gr.update(), gr.update(), "❌ Error: A generation process is already actively running."
                 return
@@ -1843,7 +1928,7 @@ with gr.Blocks(title="Synesthesia AI Video Director", theme=gr.themes.Default(),
                     try: os.remove(selected_path)
                     except Exception as e: print(f"Could not delete file {selected_path}: {e}")
 
-                vid_generator = generate_video_for_shot(shot_id_txt, resolution, vocal_mode, pm)
+                vid_generator = generate_video_for_shot(shot_id_txt, resolution, vocal_mode, pm, style)
                 final_path = None
                 for path, msg in vid_generator:
                     if path is None:
@@ -1859,14 +1944,15 @@ with gr.Blocks(title="Synesthesia AI Video Director", theme=gr.themes.Default(),
             finally:
                 pm.is_generating = False
 
-        regen_vid_same_prompt_btn.click(handle_regen_vid, inputs=[sel_shot_info_vid, selected_vid_path, vid_resolution_dropdown, vid_vocal_prompt_mode, current_proj_var, pm_state], outputs=[vid_gallery, vid_large_view, vid_gen_status], show_progress="hidden")
-        regen_vid_new_prompt_btn.click(handle_regen_vid_and_prompt, inputs=[sel_shot_info_vid, selected_vid_path, vid_resolution_dropdown, vid_vocal_prompt_mode, current_proj_var, pm_state], outputs=[vid_gallery, vid_large_view, vid_gen_status], show_progress="hidden")
+        regen_vid_same_prompt_btn.click(handle_regen_vid, inputs=[sel_shot_info_vid, selected_vid_path, vid_resolution_dropdown, vid_vocal_prompt_mode, vid_style_dropdown, current_proj_var, pm_state], outputs=[vid_gallery, vid_large_view, vid_gen_status], show_progress="hidden")
+        regen_vid_new_prompt_btn.click(handle_regen_vid_and_prompt, inputs=[sel_shot_info_vid, selected_vid_path, vid_resolution_dropdown, vid_vocal_prompt_mode, vid_style_dropdown, current_proj_var, pm_state], outputs=[vid_gallery, vid_large_view, vid_gen_status], show_progress="hidden")
 
 # --- TAB 4: ASSEMBLY & CUTTING ROOM ---
     with gr.Tab("4. Assembly & Cutting Room") as tab4_ui:
         gr.Markdown("### ✂️ Cutting Room & Version Comparison")
         with gr.Row():
             compare_shot_dropdown = gr.Dropdown(label="Select Shot to Compare Versions")
+            vid_style_filter_dropdown = gr.Dropdown(choices=["All Styles"], value="All Styles", label="Style Filter")
             prev_shot_btn = gr.Button("⬅️ Previous Shot")
             next_shot_btn = gr.Button("➡️ Next Shot")
         
@@ -1948,9 +2034,12 @@ with gr.Blocks(title="Synesthesia AI Video Director", theme=gr.themes.Default(),
             render_choices = [os.path.basename(p) for p in render_paths]
             progress(1.0, desc="Complete!")
             value = shared_shot if shared_shot in choices else None
-            return gr.update(choices=choices, value=value), pm.df, gallery_data, render_paths, gr.update(choices=render_choices, value=None)
+            style_names = get_styles_in_videos_dir(pm)
+            style_choices = ["All Styles"] + style_names + (["No Style"] if style_names else [])
+            return (gr.update(choices=choices, value=value), pm.df, gallery_data, render_paths,
+                    gr.update(choices=render_choices, value=None), gr.update(choices=style_choices, value="All Styles"))
 
-        tab4_ui.select(manual_sync_and_get_choices, inputs=[pm_state, shared_shot_state], outputs=[compare_shot_dropdown, shot_table, renders_gallery, renders_state, render_select_dropdown])
+        tab4_ui.select(manual_sync_and_get_choices, inputs=[pm_state, shared_shot_state], outputs=[compare_shot_dropdown, shot_table, renders_gallery, renders_state, render_select_dropdown, vid_style_filter_dropdown])
         
         # Next shot cycling logic
         def get_next_shot(current_shot, pm):
@@ -1993,17 +2082,28 @@ with gr.Blocks(title="Synesthesia AI Video Director", theme=gr.themes.Default(),
         prev_shot_btn.click(get_prev_shot, inputs=[compare_shot_dropdown, pm_state], outputs=[compare_shot_dropdown])
         next_shot_btn.click(get_next_shot, inputs=[compare_shot_dropdown, pm_state], outputs=[compare_shot_dropdown])
         
-        def update_comparison_view(shot_id, pm):
+        def update_comparison_view(shot_id, style_filter, pm):
             if not shot_id or pm.df.empty:
                 return [gr.update(visible=False)] * 5 + [gr.update(value=None)] * 5 + [""] * 5
-                
+
             row_idx = pm.df.index[pm.df['Shot_ID'].astype(str).str.upper() == str(shot_id).upper()].tolist()
             if not row_idx:
                 return [gr.update(visible=False)] * 5 + [gr.update(value=None)] * 5 + [""] * 5
-                
+
             paths_str = pm.df.loc[row_idx[0], "All_Video_Paths"]
-            if not paths_str or pd.isna(paths_str): paths = []
-            else: paths = [p.strip() for p in paths_str.split(",") if p.strip()]
+            if not paths_str or pd.isna(paths_str):
+                all_paths = []
+            else:
+                all_paths = [p.strip() for p in paths_str.split(",") if p.strip()]
+
+            # Apply style filter
+            if not style_filter or style_filter == "All Styles":
+                paths = all_paths
+            elif style_filter == "No Style":
+                paths = [p for p in all_paths if slug_from_filename(os.path.basename(p)) is None]
+            else:
+                slug = style_to_slug(style_filter)
+                paths = [p for p in all_paths if slug_from_filename(os.path.basename(p)) == slug]
 
             col_updates = []
             vid_updates = []
@@ -2011,7 +2111,7 @@ with gr.Blocks(title="Synesthesia AI Video Director", theme=gr.themes.Default(),
 
             active_path = pm.df.loc[row_idx[0], "Video_Path"]
             if pd.isna(active_path): active_path = ""
-            
+
             for i in range(5):
                 if i < len(paths):
                     p = paths[i]
@@ -2024,24 +2124,43 @@ with gr.Blocks(title="Synesthesia AI Video Director", theme=gr.themes.Default(),
                     col_updates.append(gr.update(visible=False))
                     vid_updates.append(gr.update(value=None))
                     path_updates.append("")
-                    
+
             return col_updates + vid_updates + path_updates
-            
-        compare_shot_dropdown.change(update_comparison_view, inputs=[compare_shot_dropdown, pm_state], outputs=compare_cols + compare_vids + compare_paths)
+
+        compare_shot_dropdown.change(update_comparison_view, inputs=[compare_shot_dropdown, vid_style_filter_dropdown, pm_state], outputs=compare_cols + compare_vids + compare_paths)
         compare_shot_dropdown.change(lambda s: s, inputs=[compare_shot_dropdown], outputs=[shared_shot_state])
+        vid_style_filter_dropdown.change(update_comparison_view, inputs=[compare_shot_dropdown, vid_style_filter_dropdown, pm_state], outputs=compare_cols + compare_vids + compare_paths)
         
-        def set_active_video(path, shot_id, pm):
-            if not path or not os.path.exists(path): return update_comparison_view(shot_id, pm)
+        def filter_shots_by_style(style_name, pm):
+            if style_name == "All Styles" or pm.df.empty:
+                choices = pm.df[pm.df["All_Video_Paths"] != ""]["Shot_ID"].dropna().unique().tolist() if not pm.df.empty else []
+            else:
+                slug = style_to_slug(style_name) if style_name != "No Style" else None
+                choices = []
+                for _, row in pm.df.iterrows():
+                    paths = str(row.get("All_Video_Paths", "")).split(",")
+                    for p in paths:
+                        file_slug = slug_from_filename(os.path.basename(p.strip()))
+                        if (slug is None and file_slug is None) or file_slug == slug:
+                            choices.append(row["Shot_ID"])
+                            break
+            value = choices[0] if choices else None
+            return gr.update(choices=choices, value=value)
+
+        vid_style_filter_dropdown.change(filter_shots_by_style, inputs=[vid_style_filter_dropdown, pm_state], outputs=[compare_shot_dropdown])
+
+        def set_active_video(path, shot_id, style_filter, pm):
+            if not path or not os.path.exists(path): return update_comparison_view(shot_id, style_filter, pm)
             row_idx = pm.df.index[pm.df['Shot_ID'].astype(str).str.upper() == str(shot_id).upper()].tolist()
             if row_idx:
                 pm.df.at[row_idx[0], "Video_Path"] = path
                 pm.save_data()
-            return update_comparison_view(shot_id, pm)
-            
-        def move_to_cutting_room(path, shot_id, pm):
+            return update_comparison_view(shot_id, style_filter, pm)
+
+        def move_to_cutting_room(path, shot_id, style_filter, pm):
             if not path or not os.path.exists(path):
                 choices = pm.df[pm.df["All_Video_Paths"] != ""]["Shot_ID"].dropna().unique().tolist() if not pm.df.empty else []
-                return [gr.update(choices=choices, value=shot_id)] + update_comparison_view(shot_id, pm)
+                return [gr.update(choices=choices, value=shot_id)] + update_comparison_view(shot_id, style_filter, pm)
 
             cut_dir = pm.get_path("cutting_room")
             os.makedirs(cut_dir, exist_ok=True)
@@ -2055,14 +2174,14 @@ with gr.Blocks(title="Synesthesia AI Video Director", theme=gr.themes.Default(),
             if shot_id not in choices:
                 shot_id = choices[0] if choices else None
 
-            return [gr.update(choices=choices, value=shot_id)] + update_comparison_view(shot_id, pm)
-            
+            return [gr.update(choices=choices, value=shot_id)] + update_comparison_view(shot_id, style_filter, pm)
+
         for i in range(5):
-            compare_set_btns[i].click(set_active_video, inputs=[compare_paths[i], compare_shot_dropdown, pm_state], outputs=compare_cols + compare_vids + compare_paths)
-            compare_cut_btns[i].click(move_to_cutting_room, inputs=[compare_paths[i], compare_shot_dropdown, pm_state], outputs=[compare_shot_dropdown] + compare_cols + compare_vids + compare_paths)
+            compare_set_btns[i].click(set_active_video, inputs=[compare_paths[i], compare_shot_dropdown, vid_style_filter_dropdown, pm_state], outputs=compare_cols + compare_vids + compare_paths)
+            compare_cut_btns[i].click(move_to_cutting_room, inputs=[compare_paths[i], compare_shot_dropdown, vid_style_filter_dropdown, pm_state], outputs=[compare_shot_dropdown] + compare_cols + compare_vids + compare_paths)
         
-        def assemble_and_refresh(song_file, resolution, pm, fallback_mode):
-            result = assemble_video(get_file_path(song_file), resolution, pm, fallback_mode=fallback_mode)
+        def assemble_and_refresh(song_file, resolution, style_filter, pm, fallback_mode):
+            result = assemble_video(get_file_path(song_file), resolution, pm, fallback_mode=fallback_mode, style_filter=style_filter)
             gallery_data, render_paths = get_project_renders(pm)
             render_choices = [os.path.basename(p) for p in render_paths]
             if result and os.path.exists(str(result)):
@@ -2070,8 +2189,8 @@ with gr.Blocks(title="Synesthesia AI Video Director", theme=gr.themes.Default(),
             else:
                 return None, str(result), gallery_data, render_paths, gr.update(choices=render_choices, value=None)
 
-        assemble_btn.click(lambda s, res, pm: assemble_and_refresh(s, res, pm, False), inputs=[song_up, vid_resolution_dropdown, pm_state], outputs=[final_video_out, assembly_status, renders_gallery, renders_state, render_select_dropdown])
-        assemble_current_btn.click(lambda s, res, pm: assemble_and_refresh(s, res, pm, True), inputs=[song_up, vid_resolution_dropdown, pm_state], outputs=[final_video_out, assembly_status, renders_gallery, renders_state, render_select_dropdown])
+        assemble_btn.click(lambda s, res, sf, pm: assemble_and_refresh(s, res, sf, pm, False), inputs=[song_up, vid_resolution_dropdown, vid_style_filter_dropdown, pm_state], outputs=[final_video_out, assembly_status, renders_gallery, renders_state, render_select_dropdown])
+        assemble_current_btn.click(lambda s, res, sf, pm: assemble_and_refresh(s, res, sf, pm, True), inputs=[song_up, vid_resolution_dropdown, vid_style_filter_dropdown, pm_state], outputs=[final_video_out, assembly_status, renders_gallery, renders_state, render_select_dropdown])
 
         def assemble_crf_and_refresh(song_file, resolution, pm):
             result = assemble_cutting_room_floor(get_file_path(song_file), resolution, pm)
@@ -2618,4 +2737,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"⚠️ Could not register hotkey 'ctrl+r'. Run script as admin or ensure 'keyboard' module is installed. Error: {e}")
         
+    app.queue()
     app.launch(allowed_paths=[os.path.join(os.path.dirname(os.path.abspath(__file__)), "projects")])

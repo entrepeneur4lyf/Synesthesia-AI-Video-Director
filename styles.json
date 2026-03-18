@@ -1,0 +1,37 @@
+[
+    {
+        "name": "LTX - 90s CGI",
+        "prompt": "A scene rendered in the style of early 1990s 3D CGI computer graphics, featuring {prompt}. The visuals have primitive Gouraud shading, low-resolution textures, blocky low-poly geometry, and basic raytraced reflections. The lighting is harsh and artificial, evoking classic retro cutscenes and early virtual reality.",
+        "negative_prompt": "photorealistic, modern rendering, high definition, sub-surface scattering, global illumination, highly detailed, realistic textures"
+    },
+    {
+        "name": "LTX - Claymation",
+        "prompt": "A stop-motion claymation scene of {prompt}. The characters and environment are crafted from tactile, sculpted modeling clay with visible fingerprints and slight physical imperfections. The animation has a tactile, physical presence, shot under controlled miniature studio lighting with soft, warm shadows.",
+        "negative_prompt": "CGI, 2D animation, flat, digital drawing, smooth perfect surfaces, realistic humans, photorealistic"
+    },
+    {
+        "name": "LTX - Film Noir",
+        "prompt": "A classic 1940s film noir scene showing {prompt}. The cinematography is strictly black and white with high-contrast chiaroscuro lighting, deep impenetrable shadows, and harsh highlights. The atmosphere is moody and tense, featuring a subtle cinematic film grain and soft focus on the edges of the frame.",
+        "negative_prompt": "color, vibrant, bright daylight, flat lighting, modern, low contrast, digital video look"
+    },
+    {
+        "name": "LTX - Puppetry",
+        "prompt": "A live-action television puppetry scene featuring {prompt}. The subjects are constructed from colorful felt, fleece, and foam, with expressive features and practical physical movements. The environment is a highly detailed miniature practical set, lit with theatrical stage lighting and a shallow depth of field.",
+        "negative_prompt": "CGI, 3D render, cartoon, 2D animation, human actors, photorealistic skin, digital effects"
+    },
+    {
+        "name": "LTX - Grindhouse Exploitation",
+        "prompt": "A gritty 1970s grindhouse exploitation film scene of {prompt}. The footage has a raw aesthetic with heavy, coarse film grain, faded vintage color grading, and a warm, dirty hue. The image is marred by visible celluloid scratches, dust, and occasional splice marks, lit with harsh practical lighting.",
+        "negative_prompt": "clean, pristine, digital 4k, smooth, modern color grading, high quality, flawless lens"
+    },
+    {
+        "name": "LTX - 90s Cel Anime",
+        "prompt": "A vintage 1990s era cel-shaded anime scene depicting {prompt}. The animation features hand-drawn line art, flat vibrant colors, and detailed painted matte backgrounds. The visual style captures the nostalgic essence of classic Japanese OVA animation, complete with authentic CRT phosphor bloom and slight color bleeding.",
+        "negative_prompt": "3D render, modern digital anime, CGI, realistic, 2.5D, live action, photorealistic"
+    },
+    {
+        "name": "LTX - Procedural Glitch",
+        "prompt": "A digital procedural glitch art scene where {prompt}. The imagery is heavily distorted by databending, pixel sorting, and VHS tracking errors. Bright RGB chromatic aberration, scanline interference, and macroblocking artifacts fracture the picture, creating a chaotic, cyberpunk digital aesthetic.",
+        "negative_prompt": "clean, clear, natural, realistic, perfect condition, smooth, organic, analog film"
+    }
+]
