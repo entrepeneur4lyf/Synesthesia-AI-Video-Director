@@ -1,4 +1,5 @@
 import os
+import re
 import glob
 import time
 import shutil
@@ -14,6 +15,17 @@ from models import sync_video_directory
 
 # Global cache for ffprobe frame counts to speed up preview loading in Tab 3
 FRAME_COUNT_CACHE = {}
+
+
+def apply_character_bibles(prompt, character_bibles):
+    """Replace the first occurrence of each character's name with 'name (description)'.
+    Subsequent occurrences within the same prompt are left as the plain name,
+    preventing the description from appearing more than once per prompt."""
+    for name, description in character_bibles.items():
+        pattern = re.compile(r'\b' + re.escape(name) + r'\b', re.IGNORECASE | re.UNICODE)
+        replacement = f"{name} ({description})"
+        prompt = pattern.sub(replacement, prompt, count=1)
+    return prompt
 
 # ==========================================
 # LOGIC: VIDEO GENERATION (LTX)
@@ -138,6 +150,10 @@ def generate_video_for_shot(shot_id, resolution, vocal_mode, pm, style=None):
     if not vid_prompt:
         yield None, "Error: Missing Video Prompt."
         return
+
+    # Inject character bible descriptions (first occurrence of each name only)
+    if pm.character_bibles:
+        vid_prompt = apply_character_bibles(vid_prompt, pm.character_bibles)
 
     negative_prompt = config.DEFAULT_NEGATIVE_PROMPT
     style_data = next((s for s in config.STYLES if s["name"] == style), None) if style and style != "None" else None

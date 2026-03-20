@@ -1,4 +1,5 @@
 import os
+import csv
 import json
 import re
 import time
@@ -61,6 +62,7 @@ class ProjectManager:
         self.stop_generation = False
         self.stop_video_generation = False
         self.is_generating = False
+        self.character_bibles = {}  # {character_name: description}
 
         # Render Queue
         self.render_queue = []
@@ -143,6 +145,7 @@ class ProjectManager:
             self.session_start_time = time.time()
 
             sync_video_directory(self)
+            self.load_character_bibles()
             return f"Loaded '{name}'", self.df
         return "Project not found.", pd.DataFrame()
 
@@ -206,6 +209,52 @@ class ProjectManager:
         if self.current_project:
             path = os.path.join(self.base_dir, self.current_project, "shot_list.csv")
             self.df.to_csv(path, index=False)
+
+    def save_character_bibles(self):
+        if not self.current_project:
+            return
+        path = os.path.join(self.base_dir, self.current_project, "character_bibles.csv")
+        try:
+            with open(path, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f, quoting=csv.QUOTE_ALL)
+                writer.writerow(["character_name", "description"])
+                for name, desc in self.character_bibles.items():
+                    writer.writerow([name, desc])
+        except Exception as e:
+            print(f"Error saving character bibles: {e}")
+
+    def load_character_bibles(self):
+        if not self.current_project:
+            self.character_bibles = {}
+            return {}
+        path = os.path.join(self.base_dir, self.current_project, "character_bibles.csv")
+        bibles = {}
+        if os.path.exists(path):
+            try:
+                with open(path, 'r', newline='', encoding='utf-8') as f:
+                    reader = csv.reader(f)
+                    next(reader, None)  # skip header
+                    for row in reader:
+                        if len(row) >= 2 and row[0].strip():
+                            bibles[row[0].strip()] = row[1].strip()
+            except Exception as e:
+                print(f"Error loading character bibles: {e}")
+        self.character_bibles = bibles
+        return bibles
+
+    def update_characters_column(self):
+        """Scan each shot's Video_Prompt and record which bible characters appear in it."""
+        if "Characters" not in self.df.columns:
+            self.df["Characters"] = ""
+        for idx, row in self.df.iterrows():
+            prompt_raw = row.get("Video_Prompt", "")
+            prompt = "" if pd.isna(prompt_raw) else str(prompt_raw)
+            found = []
+            for name in self.character_bibles:
+                pattern = re.compile(r'\b' + re.escape(name) + r'\b', re.IGNORECASE | re.UNICODE)
+                if pattern.search(prompt):
+                    found.append(name)
+            self.df.at[idx, "Characters"] = ", ".join(found)
 
     def get_path(self, subfolder):
         if not self.current_project: return None

@@ -1,5 +1,7 @@
 import os
 import io
+import csv
+import re
 import time
 import threading
 
@@ -173,6 +175,100 @@ def generate_concepts_logic(overarching_plot, llm_model, rough_concept, performa
     except Exception as e:
         yield df, f"❌ Error parsing LLM CSV response: {str(e)}"
         print("LLM Response:\n", response)
+
+def generate_character_bibles_logic(pm, llm_model, video_mode, bible_sys_prompt="", bible_user_template=""):
+    """Generator: analyze shot prompts, extract character bibles via LLM, save and yield results.
+    Yields 3-tuples: (status_str, bible_dataframe, shot_dataframe)
+    """
+    empty_bible_df = pd.DataFrame(columns=["character_name", "description"])
+
+    # Snapshot current state for intermediate yields (don't wipe existing data while waiting)
+    current_bible_df = pd.DataFrame(
+        list(pm.character_bibles.items()), columns=["character_name", "description"]
+    ) if pm.character_bibles else empty_bible_df
+
+    if not pm.current_project or pm.df.empty:
+        yield "❌ No project loaded or timeline is empty.", empty_bible_df, pm.df
+        return
+
+    # Select rows based on mode
+    if video_mode == "Intercut":
+        story_df = pm.df[pm.df['Type'] == 'Action']
+    else:
+        story_df = pm.df
+
+    prompts = [
+        str(p).strip() for p in story_df['Video_Prompt']
+        if p and not pd.isna(p) and str(p).strip()
+    ]
+    if len(prompts) < 2:
+        yield "⚠️ Not enough shot prompts to detect characters. Generate video prompts first.", empty_bible_df, pm.df
+        return
+
+    shot_prompts_str = "\n".join(f"{i+1}. {p}" for i, p in enumerate(prompts))
+    tmpl = bible_user_template.strip() if bible_user_template and bible_user_template.strip() else config.CHARACTER_BIBLE_USER_TEMPLATE
+    sys_p = bible_sys_prompt.strip() if bible_sys_prompt and bible_sys_prompt.strip() else config.CHARACTER_BIBLE_SYSTEM_PROMPT
+    user_prompt = tmpl.format(shot_prompts=shot_prompts_str)
+
+    yield "⏳ Analyzing story for recurring characters... (Check LM Studio for progress)", current_bible_df, pm.df
+
+    llm = LLMBridge()
+    result_box = [None]
+
+    def _run():
+        result_box[0] = llm.query(sys_p, user_prompt, llm_model)
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    elapsed, warned = 0, False
+    while t.is_alive():
+        time.sleep(1)
+        elapsed += 1
+        if elapsed >= 120 and not warned:
+            yield "⚠️ LLM is taking longer than 2 minutes. Keep waiting or reload the page to cancel.", current_bible_df, pm.df
+            warned = True
+    t.join()
+
+    response = result_box[0]
+    if not response or response.startswith("Error"):
+        yield f"❌ LLM query failed: {response}", empty_bible_df, pm.df
+        return
+
+    # Strip markdown fences
+    csv_text = response
+    if "```csv" in response:
+        csv_text = response.split("```csv")[1].split("```")[0].strip()
+    elif "```" in response:
+        csv_text = response.split("```")[1].split("```")[0].strip()
+
+    # Parse CSV with proper quoting support
+    bibles = {}
+    try:
+        reader = csv.reader(io.StringIO(csv_text))
+        header = next(reader, None)
+        for row in reader:
+            if len(row) >= 2 and row[0].strip():
+                name = row[0].strip()
+                desc = row[1].strip()
+                if name.lower() not in ("character_name", "name"):  # skip repeated header rows
+                    bibles[name] = desc
+    except Exception as e:
+        yield f"❌ Error parsing character bible CSV: {e}", empty_bible_df, pm.df
+        return
+
+    if not bibles:
+        yield "⚠️ No recurring named characters detected in the story.", empty_bible_df, pm.df
+        return
+
+    pm.character_bibles = bibles
+    pm.save_character_bibles()
+    pm.update_characters_column()
+    pm.save_data()
+
+    bible_df = pd.DataFrame(list(bibles.items()), columns=["character_name", "description"])
+    names_list = ", ".join(bibles.keys())
+    yield f"✅ Character bibles generated for {len(bibles)} character(s): {names_list}", bible_df, pm.df
+
 
 def stop_gen(pm):
     pm.stop_generation = True

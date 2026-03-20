@@ -8,7 +8,8 @@ import config
 from models import LLMBridge
 from timeline import get_existing_projects, scan_vocals_advanced, build_simple_timeline
 from llm_logic import (generate_overarching_plot, generate_performance_description,
-                       generate_concepts_logic, stop_gen, generate_story_file)
+                       generate_concepts_logic, generate_character_bibles_logic,
+                       stop_gen, generate_story_file)
 from utils import get_file_path
 
 
@@ -85,6 +86,11 @@ def build(pm_state, current_proj_var, shared_shot_state, vocals_up, lyrics_in):
                     concepts_scripted_template_in = gr.Textbox(value=config.SCRIPTED_PROMPT_TEMPLATE, label="Scripted Template", lines=6)
                     gr.Markdown("*Placeholders: `{gender}`, `{character_desc}`, `{concept}`, `{shot_list}`*")
 
+                with gr.Accordion("Character Bible Template", open=False):
+                    bible_sys_prompt_in = gr.Textbox(value=config.CHARACTER_BIBLE_SYSTEM_PROMPT, label="System Prompt", lines=2)
+                    bible_user_template_in = gr.Textbox(value=config.CHARACTER_BIBLE_USER_TEMPLATE, label="User Prompt Template", lines=8)
+                    gr.Markdown("*Placeholders: `{shot_prompts}`*")
+
                 with gr.Accordion("Single Shot Regeneration Template (Used in Tab 3)", open=False):
                     prompt_template_in = gr.Textbox(value=config.DEFAULT_CONCEPT_PROMPT, label="Single Shot Prompt Template", lines=4)
                     gr.Markdown("*Placeholders: `{plot}`, `{prev_shot}`, `{start}`, `{duration}`, `{type}`*")
@@ -94,6 +100,23 @@ def build(pm_state, current_proj_var, shared_shot_state, vocals_up, lyrics_in):
                 stop_concepts_btn = gr.Button("Stop Generation", variant="stop")
 
             concept_gen_status = gr.Textbox(label="Concept Generation Status", interactive=False)
+
+            with gr.Accordion("📖 Character Bibles", open=False):
+                gr.Markdown(
+                    "After generating video prompts, click **Generate Character Bibles** to have the LLM "
+                    "identify all recurring named characters and build a visual description for each. "
+                    "These descriptions are automatically injected into each LTX video prompt at generation time. "
+                    "Edit the table below to refine descriptions — changes auto-save."
+                )
+                gen_bible_btn = gr.Button("Generate Character Bibles")
+                bible_status = gr.Textbox(label="Bible Generation Status", interactive=False)
+                bible_table = gr.Dataframe(
+                    headers=["character_name", "description"],
+                    label="Character Bibles (Editable)",
+                    interactive=True,
+                    wrap=True,
+                    type="pandas"
+                )
 
         with gr.Row():
             gr.Markdown("### 📂 Data Management")
@@ -114,12 +137,14 @@ def build(pm_state, current_proj_var, shared_shot_state, vocals_up, lyrics_in):
     t2_inputs = [current_proj_var, min_silence_sl, silence_thresh_sl, shot_mode_drp, min_shot_dur, max_shot_dur, llm_dropdown, rough_concept_in, plot_out, prompt_template_in, performance_desc_in, video_mode_drp, scripted_total_dur, scripted_shot_count, pm_state,
                  plot_sys_prompt_in, plot_user_template_in, plot_sys_prompt_scripted_in, plot_user_template_scripted_in,
                  perf_sys_prompt_in, perf_user_template_in, perf_sys_prompt_scripted_in, perf_user_template_scripted_in,
-                 concepts_bulk_template_in, concepts_vocals_template_in, concepts_scripted_template_in]
+                 concepts_bulk_template_in, concepts_vocals_template_in, concepts_scripted_template_in,
+                 bible_sys_prompt_in, bible_user_template_in]
 
     def auto_save_tab2(proj_name, min_sil, sil_thresh, mode, min_d, max_d, llm, concept, plot, template, performance_d, video_mode, s_total_dur, s_shot_count, pm,
                        p_sys_m, p_user_m, p_sys_s, p_user_s,
                        pf_sys_m, pf_user_m, pf_sys_s, pf_user_s,
-                       c_bulk, c_vocals, c_scripted):
+                       c_bulk, c_vocals, c_scripted,
+                       b_sys, b_user):
         if proj_name:
             pm.current_project = proj_name
             settings = {
@@ -134,7 +159,8 @@ def build(pm_state, current_proj_var, shared_shot_state, vocals_up, lyrics_in):
                 "perf_sys_prompt_music": pf_sys_m, "perf_user_template_music": pf_user_m,
                 "perf_sys_prompt_scripted": pf_sys_s, "perf_user_template_scripted": pf_user_s,
                 "concepts_bulk_template": c_bulk, "concepts_vocals_template": c_vocals,
-                "concepts_scripted_template": c_scripted
+                "concepts_scripted_template": c_scripted,
+                "bible_sys_prompt": b_sys, "bible_user_template": b_user
             }
             pm.save_project_settings(settings)
 
@@ -144,7 +170,8 @@ def build(pm_state, current_proj_var, shared_shot_state, vocals_up, lyrics_in):
     for tab2_text_comp in [rough_concept_in, plot_out, prompt_template_in, performance_desc_in,
                            plot_sys_prompt_in, plot_user_template_in, plot_sys_prompt_scripted_in, plot_user_template_scripted_in,
                            perf_sys_prompt_in, perf_user_template_in, perf_sys_prompt_scripted_in, perf_user_template_scripted_in,
-                           concepts_bulk_template_in, concepts_vocals_template_in, concepts_scripted_template_in]:
+                           concepts_bulk_template_in, concepts_vocals_template_in, concepts_scripted_template_in,
+                           bible_sys_prompt_in, bible_user_template_in]:
         tab2_text_comp.blur(auto_save_tab2, inputs=t2_inputs)
 
     def reset_templates():
@@ -154,6 +181,7 @@ def build(pm_state, current_proj_var, shared_shot_state, vocals_up, lyrics_in):
             config.DEFAULT_PERF_SYSTEM_PROMPT_MUSIC, config.DEFAULT_PERF_USER_TEMPLATE_MUSIC,
             config.DEFAULT_PERF_SYSTEM_PROMPT_SCRIPTED, config.DEFAULT_PERF_USER_TEMPLATE_SCRIPTED,
             config.BULK_PROMPT_TEMPLATE, config.ALL_VOCALS_PROMPT_TEMPLATE, config.SCRIPTED_PROMPT_TEMPLATE,
+            config.CHARACTER_BIBLE_SYSTEM_PROMPT, config.CHARACTER_BIBLE_USER_TEMPLATE,
             config.DEFAULT_CONCEPT_PROMPT
         )
     reset_templates_btn.click(reset_templates, outputs=[
@@ -162,6 +190,7 @@ def build(pm_state, current_proj_var, shared_shot_state, vocals_up, lyrics_in):
         perf_sys_prompt_in, perf_user_template_in,
         perf_sys_prompt_scripted_in, perf_user_template_scripted_in,
         concepts_bulk_template_in, concepts_vocals_template_in, concepts_scripted_template_in,
+        bible_sys_prompt_in, bible_user_template_in,
         prompt_template_in
     ])
 
@@ -252,8 +281,42 @@ def build(pm_state, current_proj_var, shared_shot_state, vocals_up, lyrics_in):
     gen_performance_btn.click(generate_performance_description, inputs=[rough_concept_in, plot_out, singer_gender_in, llm_dropdown, video_mode_drp, perf_sys_prompt_in, perf_user_template_in, perf_sys_prompt_scripted_in, perf_user_template_scripted_in], outputs=performance_desc_in)
     gen_plot_btn.click(generate_overarching_plot, inputs=[rough_concept_in, lyrics_in, llm_dropdown, pm_state, video_mode_drp, plot_sys_prompt_in, plot_user_template_in, plot_sys_prompt_scripted_in, plot_user_template_scripted_in], outputs=plot_out)
 
-    gen_concepts_btn.click(generate_concepts_logic, inputs=[plot_out, llm_dropdown, rough_concept_in, performance_desc_in, pm_state, video_mode_drp, singer_gender_in, concepts_bulk_template_in, concepts_vocals_template_in, concepts_scripted_template_in], outputs=[shot_table, concept_gen_status])
+    gen_concepts_btn.click(
+        generate_concepts_logic,
+        inputs=[plot_out, llm_dropdown, rough_concept_in, performance_desc_in, pm_state,
+                video_mode_drp, singer_gender_in, concepts_bulk_template_in,
+                concepts_vocals_template_in, concepts_scripted_template_in],
+        outputs=[shot_table, concept_gen_status]
+    ).then(
+        generate_character_bibles_logic,
+        inputs=[pm_state, llm_dropdown, video_mode_drp, bible_sys_prompt_in, bible_user_template_in],
+        outputs=[bible_status, bible_table, shot_table]
+    )
     stop_concepts_btn.click(stop_gen, inputs=[pm_state], outputs=[concept_gen_status])
+
+    gen_bible_btn.click(
+        generate_character_bibles_logic,
+        inputs=[pm_state, llm_dropdown, video_mode_drp, bible_sys_prompt_in, bible_user_template_in],
+        outputs=[bible_status, bible_table, shot_table]
+    )
+
+    def save_bible_edits(new_df, pm):
+        if pm.current_project and new_df is not None:
+            try:
+                bibles = {}
+                for _, row in new_df.iterrows():
+                    name = str(row.get("character_name", "")).strip()
+                    desc = str(row.get("description", "")).strip()
+                    if name and name.lower() != "nan":
+                        bibles[name] = desc
+                pm.character_bibles = bibles
+                pm.save_character_bibles()
+                pm.update_characters_column()
+                pm.save_data()
+            except Exception as e:
+                print(f"Error saving bible edits: {e}")
+
+    bible_table.change(save_bible_edits, inputs=[bible_table, pm_state])
 
     export_csv_btn.click(lambda pm: pm.export_csv(), inputs=[pm_state], outputs=csv_downloader)
     import_csv_btn.upload(lambda f, pm: pm.import_csv(f), inputs=[import_csv_btn, pm_state], outputs=[import_status, shot_table])
@@ -305,4 +368,8 @@ def build(pm_state, current_proj_var, shared_shot_state, vocals_up, lyrics_in):
         "concepts_bulk_template_in": concepts_bulk_template_in,
         "concepts_vocals_template_in": concepts_vocals_template_in,
         "concepts_scripted_template_in": concepts_scripted_template_in,
+        "bible_sys_prompt_in": bible_sys_prompt_in,
+        "bible_user_template_in": bible_user_template_in,
+        "bible_table": bible_table,
+        "bible_status": bible_status,
     }

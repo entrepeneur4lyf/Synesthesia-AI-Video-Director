@@ -14,7 +14,7 @@ REQUIRED_COLUMNS = [
     "Shot_ID", "Type",
     "Start_Time", "End_Time", "Duration",
     "Start_Frame", "End_Frame", "Total_Frames",
-    "Lyrics", "Video_Prompt", "Video_Path", "All_Video_Paths", "Status"
+    "Lyrics", "Video_Prompt", "Characters", "Video_Path", "All_Video_Paths", "Status"
 ]
 
 RESOLUTION_MAP = {
@@ -85,7 +85,7 @@ LTX_SYSTEM_PROMPT = """You are an expert cinematography AI director writing vide
 1. Establish the shot: Use cinematography terms that match the preferred film genre. Include aspects like scale or specific category characteristics.
 2. Set the scene: Describe lighting conditions, color palette, surface textures, and atmosphere to shape the mood.
 3. Describe the action: Write the core action as a natural sequence, flowing from beginning to end.
-4. Define your character(s): Include age, hairstyle, clothing, and distinguishing details. Express emotions through physical cues.
+4. Reference your character(s): Refer to recurring characters by their first name only. Do not describe their physical appearance — visual consistency is handled separately by the character bible.
 5. Identify camera movement(s): Specify when the view should shift and how. Include how subjects or objects appear after the camera motion.
 6. Format: Keep your prompt in a SINGLE flowing paragraph.
 7. Grammar: Use present tense verbs to describe movement and action.
@@ -94,15 +94,15 @@ LTX_SYSTEM_PROMPT = """You are an expert cinematography AI director writing vide
 10. Length: Write 4 to 8 descriptive sentences to cover all key aspects."""
 
 SCRIPTED_PROMPT_TEMPLATE = """Create a short narrative film via AI video prompts while adhering to the following main character, gender, settings, and rough concept.  See also the following csv shot list with durations and frame counts.  Return the shot list csv data with each "Video_Prompt" field filled out. include the Shot_ID and Type fields for these rows.  Do NOT include any other text in your reply.  Enclose the video prompt column in "" to prevent any commas inside the video prompt from corrupting the data.
-Follow the ltx prompt guide below to create each "action" prompt, but keep in mind that any recuring characters, objects, or locations in the story must be fully described in each prompt as the video model will have no knowledge of what came before.  Give each character a name and refer to them by name in the prompt along with their descriptions.  It is CRITICAL that we have a description of the character's build, face, hair, and clothing in EACH prompt to keep them consistent between shots.
+Follow the ltx prompt guide below to create each "action" prompt. Give each recurring character a unique first name and refer to them ONLY by that first name throughout — do NOT describe their physical appearance in the prompts. A separate character bible will inject visual descriptions automatically to keep characters consistent.
 1. Establish the Shot
 Use cinematography terms that match your intended genre. Include shot scale or category-specific characteristics to refine the visual style.
 2. Set the Scene
 Describe lighting conditions, color palette, surface textures, and atmosphere to establish mood and tone.
 3. Describe the Action
 Write the core action as a natural sequence, flowing clearly from beginning to end.
-4. Define the Character(s)
-Include age, hairstyle, clothing, and distinguishing features. Express emotion through physical cues, not abstract labels.
+4. Reference the Character(s)
+Use each character's assigned first name. Do not describe their physical appearance — visual descriptions are handled by the character bible.
 5. Identify Camera Movement(s)
 Specify how and when the camera moves. Describing how subjects appear after the movement helps the model complete the motion accurately.
 6. Describe the Audio
@@ -126,7 +126,7 @@ Shot list:
 
 ALL_VOCALS_PROMPT_TEMPLATE = """Create a music video via AI video prompts for the following song (see song lyrics below).  See the attached CSV formatted shot list with durations and frame counts. Every shot in this video is a vocal/performance shot. Create detailed, visually compelling prompts for each shot that combine performance elements with creative visual storytelling aligned to the song's themes. Do not include any guns in the story as the LTX video model censors them.  Do not use any words in your descriptions like, painted, sketched, or drawn to prevent the video model from creating animated shots.  Return the shot list in CSV format with just the "Shot_ID", "Type" and "Video_Prompt" columns.  Do NOT include any other text in your reply.  Enclose the video prompt column in "" to prevent any commas inside the video prompt from corrupting the data.
 
-Follow the ltx prompt guide below to create each prompt, but keep in mind that any recuring characters, objects, or locations in the story must be fully described in each prompt as the video model will have no knowledge of what came before.  Give each character a name and refer to them by name in the prompt along with their descriptions.  It is CRITICAL that we have a description of the character's build, face, hair, and clothing in EACH prompt to keep them consistent between shots.
+Follow the ltx prompt guide below to create each prompt. Give each recurring character a unique first name and refer to them ONLY by that first name throughout — do NOT describe their physical appearance in the prompts. A separate character bible will inject visual descriptions automatically to keep characters consistent.
 
 Establish the shot. Use cinematography terms that match your preferred film genre. Include aspects like scale or specific category characteristics to further refine the style you're looking for.
 
@@ -134,7 +134,7 @@ Set the scene. Describe lighting conditions, color palette, surface textures, an
 
 Describe the action. Write the core action as a natural sequence, flowing from beginning to end.
 
-Define your character(s). Include age, hairstyle, clothing, and distinguishing details. Express emotions through physical cues.
+Reference your character(s) by their assigned first name. Do not describe their physical appearance in the prompt.
 
 Identify camera movement(s). Specify when the view should shift and how. Including how subjects or objects appear after the camera motion gives the model a better idea of how to finish the motion.
 
@@ -158,7 +158,7 @@ Shot list:
 
 BULK_PROMPT_TEMPLATE = """Create a music video via AI video prompts for the following song (see song lyrics below).  See the attached CSV formatted shot list with durations and frame counts. We need to tell a coherent story using the shots labeled "Action" in the type column.  Align your story loosely to the themes and metaphors present in the song's lyrics, or the user suggested plot concept (if present), but do not be afraid to get creative! Do not include any guns in the story as the LTX video model censors them.  Do not use any words in your descriptions like, painted, sketched, or drawn to prevent the video model from creating animated shots.  Return the shot list in CSV format with just the "Shot_ID", "Type" and "Video_Prompt" columns.  Leave the "Vocal" type rows video prompts blank, but include the Shot_ID and Type fields for these rows.  Do NOT include any other text in your reply.  Enclose the video prompt column in "" to prevent any commas inside the video prompt from corrupting the data.
 
-Follow the ltx prompt guide below to create each "action" prompt, but keep in mind that any recuring characters, objects, or locations in the story must be fully described in each prompt as the video model will have no knowledge of what came before.  Give each character a name and refer to them by name in the prompt along with their descriptions.  It is CRITICAL that we have a description of the character's build, face, hair, and clothing in EACH prompt to keep them consistent between shots.
+Follow the ltx prompt guide below to create each "action" prompt. Give each recurring character a unique first name and refer to them ONLY by that first name throughout — do NOT describe their physical appearance in the prompts. A separate character bible will inject visual descriptions automatically to keep characters consistent.
 
 Establish the shot. Use cinematography terms that match your preferred film genre. Include aspects like scale or specific category characteristics to further refine the style you're looking for.
 
@@ -166,7 +166,7 @@ Set the scene. Describe lighting conditions, color palette, surface textures, an
 
 Describe the action. Write the core action as a natural sequence, flowing from beginning to end.
 
-Define your character(s). Include age, hairstyle, clothing, and distinguishing details. Express emotions through physical cues.
+Reference your character(s) by their assigned first name. Do not describe their physical appearance in the prompt.
 
 Identify camera movement(s). Specify when the view should shift and how. Including how subjects or objects appear after the camera motion gives the model a better idea of how to finish the motion.
 
@@ -184,6 +184,29 @@ User suggested plot concept:
 
 Shot list:
 {shot_list}"""
+
+# ==========================================
+# CHARACTER BIBLE TEMPLATES
+# ==========================================
+
+CHARACTER_BIBLE_SYSTEM_PROMPT = "You are a casting director. Only output valid CSV data with no additional text."
+
+CHARACTER_BIBLE_USER_TEMPLATE = (
+    "The following are video shot descriptions for a story.\n"
+    "Identify all recurring named characters (those appearing by first name in two or more shots).\n"
+    "Return a CSV with exactly two columns: character_name, description\n\n"
+    "For each character write a complete physical description covering: gender, approximate age, "
+    "hair color and style, eye color, distinguishing features, jewelry, makeup, and clothing/style.\n\n"
+    "CRITICAL: If any physical detail is not mentioned in the story you MUST invent a specific vivid "
+    "value for it — never write 'not specified', 'unknown', 'none mentioned', or similar placeholders. "
+    "Every detail must be a concrete visual trait an AI video model can render. "
+    "Invent a hair color, an eye color, a clothing style, etc. as needed.\n\n"
+    "Format each description as a compact comma-separated list of visual traits. "
+    "Enclose the description column value in double quotes.\n"
+    "Output ONLY the CSV header row followed by data rows. No other text.\n\n"
+    "Shot descriptions:\n"
+    "{shot_prompts}"
+)
 
 # ==========================================
 # DEFAULT LLM PROMPT TEMPLATES
@@ -206,7 +229,7 @@ DEFAULT_PLOT_USER_TEMPLATE_SCRIPTED = (
 DEFAULT_PERF_SYSTEM_PROMPT_MUSIC = "You are a casting director and set designer."
 DEFAULT_PERF_USER_TEMPLATE_MUSIC = (
     "Concept: {concept}\nPlot: {plot}\n{gender_instruction}\n"
-    "Task: Invent and sescribe the physical appearance, proper name, age, hair, clothing, and style of a lead singer for the above song, specifically for an AI video generation model. "
+    "Task: Invent and describe the physical appearance, proper name, age, hair, clothing, and style of a lead singer for the above song, specifically for an AI video generation model. "
     "Start with the phrase 'Handheld dynamic closeup shot of'. Do not include any details about the character that would be out of view in a close-up shot. "
     "End the description with; [name of singer] is careful to enunciate each word to the camera to account for their deaf sister's lip reading. "
     "Shot with a dynamic camera movement and slight handheld shake, shallow depth of field, dramatic chiaroscuro lighting, 85mm lens, 24fps, high contrast, crowd silhouettes, energetic atmosphere, cinematic color grading, [describe color pallet here] "

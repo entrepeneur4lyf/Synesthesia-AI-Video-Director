@@ -77,7 +77,7 @@ def build_app():
             clean_name = pm.sanitize_name(name)
 
             if "already exists" in msg or "Invalid" in msg:
-                return msg, gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update()
+                return msg, gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update()
 
             if v_file:
                 v_src = get_file_path(v_file)
@@ -101,7 +101,8 @@ def build_app():
                 "",
                 "",
                 "",
-                []
+                [],
+                pd.DataFrame(columns=["character_name", "description"])
             )
 
         t1["create_btn"].click(
@@ -109,7 +110,7 @@ def build_app():
             inputs=[t1["proj_name"], t1["vocals_up"], t1["song_up"], t1["lyrics_in"], pm_state],
             outputs=[t1["proj_status"], t1["project_dropdown"], current_proj_var, t1["time_spent_disp"],
                      t2["shot_table"], t2["rough_concept_in"], t2["plot_out"], t2["performance_desc_in"],
-                     t3["vid_gallery"]]
+                     t3["vid_gallery"], t2["bible_table"]]
         )
 
         def handle_load(name, pm):
@@ -126,6 +127,10 @@ def build_app():
             loaded_mode = settings.get("video_mode", "Intercut")
             is_scripted = (loaded_mode == "Scripted")
             is_intercut = (loaded_mode == "Intercut")
+
+            bible_df = pd.DataFrame(
+                list(pm.character_bibles.items()), columns=["character_name", "description"]
+            ) if pm.character_bibles else pd.DataFrame(columns=["character_name", "description"])
 
             return (
                 msg, time_str, df, lyrics, v_path, s_path,
@@ -156,6 +161,9 @@ def build_app():
                 settings.get("concepts_bulk_template", config.BULK_PROMPT_TEMPLATE),
                 settings.get("concepts_vocals_template", config.ALL_VOCALS_PROMPT_TEMPLATE),
                 settings.get("concepts_scripted_template", config.SCRIPTED_PROMPT_TEMPLATE),
+                settings.get("bible_sys_prompt", config.CHARACTER_BIBLE_SYSTEM_PROMPT),
+                settings.get("bible_user_template", config.CHARACTER_BIBLE_USER_TEMPLATE),
+                bible_df,
             )
 
         t1["load_btn"].click(
@@ -175,7 +183,9 @@ def build_app():
                 t2["plot_sys_prompt_scripted_in"], t2["plot_user_template_scripted_in"],
                 t2["perf_sys_prompt_in"], t2["perf_user_template_in"],
                 t2["perf_sys_prompt_scripted_in"], t2["perf_user_template_scripted_in"],
-                t2["concepts_bulk_template_in"], t2["concepts_vocals_template_in"], t2["concepts_scripted_template_in"]
+                t2["concepts_bulk_template_in"], t2["concepts_vocals_template_in"], t2["concepts_scripted_template_in"],
+                t2["bible_sys_prompt_in"], t2["bible_user_template_in"],
+                t2["bible_table"]
             ]
         )
 
