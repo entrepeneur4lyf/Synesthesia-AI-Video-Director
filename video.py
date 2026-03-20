@@ -16,6 +16,28 @@ from models import sync_video_directory
 # Global cache for ffprobe frame counts to speed up preview loading in Tab 3
 FRAME_COUNT_CACHE = {}
 
+_zimage_url_cache = None  # Cached after first successful discovery
+
+
+def resolve_style_data(style_name, pm):
+    """Resolve style data from name, respecting per-project overrides and Custom style."""
+    if not style_name or style_name == "None":
+        return None
+    settings = pm.load_project_settings()
+    if style_name == "Custom":
+        p = settings.get("custom_style_prompt", "")
+        n = settings.get("custom_style_negative", "")
+        return {"name": "Custom", "prompt": p, "negative_prompt": n} if p else None
+    overrides = settings.get("style_overrides", {})
+    if style_name in overrides:
+        base = next((s for s in config.STYLES if s["name"] == style_name), {})
+        return {
+            "name": style_name,
+            "prompt": overrides[style_name].get("prompt", base.get("prompt", "{prompt}")),
+            "negative_prompt": overrides[style_name].get("negative_prompt", base.get("negative_prompt", "")),
+        }
+    return next((s for s in config.STYLES if s["name"] == style_name), None)
+
 
 def apply_character_bibles(prompt, character_bibles):
     """Replace the first occurrence of each character's name with 'name (description)'.
@@ -131,7 +153,97 @@ def get_video_count_for_shot(shot_id, vid_list):
             count += 1
     return count
 
-def generate_video_for_shot(shot_id, resolution, vocal_mode, pm, style=None):
+def _discover_zimage_url():
+    """Discover the Z-Image endpoint URL via the LTX Desktop OpenAPI schema.
+    Queries /openapi.json at the host root, finds the route whose requestBody
+    references GenerateImageRequest, and returns the full URL.
+    Caches the result after first success. Returns None on failure."""
+    global _zimage_url_cache
+    if _zimage_url_cache:
+        return _zimage_url_cache
+
+    # Extract host root: strip trailing /api or /api/ from LTX_BASE_URL
+    base = config.LTX_BASE_URL.rstrip('/')
+    host = base[:-4] if base.endswith('/api') else base  # e.g. http://127.0.0.1:8000
+
+    try:
+        resp = requests.get(f"{host}/openapi.json", timeout=5)
+        resp.raise_for_status()
+        schema = resp.json()
+        for path, methods in schema.get("paths", {}).items():
+            if "post" in methods:
+                req_ref = str(methods["post"].get("requestBody", {}))
+                if "GenerateImageRequest" in req_ref:
+                    _zimage_url_cache = f"{host}{path}"
+                    print(f"🔍 Z-Image endpoint discovered: {_zimage_url_cache}")
+                    return _zimage_url_cache
+    except Exception as e:
+        print(f"⚠️ Z-Image endpoint discovery failed: {e}")
+
+    return None
+
+
+def generate_zimage_first_frame(prompt, shot_id, pm):
+    """Call Z-image endpoint, save result to first_frames/, yield string progress updates,
+    and yield a final (path, error) tuple as the last item."""
+    payload = {
+        "prompt": prompt,
+        "width": config.Z_IMAGE_WIDTH,
+        "height": config.Z_IMAGE_HEIGHT,
+        "numSteps": 4,
+        "numImages": 1,
+    }
+    result_container = {}
+
+    def worker():
+        url = _discover_zimage_url()
+        if not url:
+            result_container['error'] = "Could not discover Z-Image endpoint from LTX Desktop OpenAPI schema."
+            return
+        try:
+            resp = requests.post(url, json=payload)
+            resp.raise_for_status()
+            result_container['response'] = resp.json()
+        except requests.exceptions.RequestException as e:
+            err_msg = str(e)
+            if hasattr(e, 'response') and e.response is not None:
+                err_msg += f" - {e.response.text}"
+            result_container['error'] = err_msg
+
+    t = threading.Thread(target=worker)
+    t.start()
+
+    while t.is_alive():
+        time.sleep(1)
+        try:
+            prog_resp = requests.get(f"{config.LTX_BASE_URL}/generation/progress", timeout=2)
+            if prog_resp.status_code == 200:
+                data = prog_resp.json()
+                yield f"Z-Image: {data.get('status')} | {data.get('phase')} | {data.get('progress')}%"
+        except requests.exceptions.RequestException:
+            pass
+
+    t.join()
+
+    if 'error' in result_container:
+        yield (None, result_container['error'])
+        return
+
+    image_paths = result_container['response'].get('image_paths') or []
+    if not image_paths or not os.path.exists(image_paths[0]):
+        yield (None, "No image path returned.")
+        return
+
+    frames_dir = pm.get_path("first_frames")
+    os.makedirs(frames_dir, exist_ok=True)
+    save_name = f"{shot_id}_frame_v{int(time.time())}.png"
+    local_path = os.path.join(frames_dir, save_name)
+    shutil.copy(image_paths[0], local_path)
+    print(f"🖼️ Z-Image first frame saved: {local_path}")
+    yield (local_path, None)
+
+
+def generate_video_for_shot(shot_id, resolution, vocal_mode, pm, style=None, director=None, generation_mode="LTX-Native"):
     row_idx = pm.df.index[pm.df['Shot_ID'].astype(str).str.upper() == str(shot_id).upper()].tolist()
     if not row_idx:
         yield None, "Error: Shot not found in timeline."
@@ -156,10 +268,18 @@ def generate_video_for_shot(shot_id, resolution, vocal_mode, pm, style=None):
         vid_prompt = apply_character_bibles(vid_prompt, pm.character_bibles)
 
     negative_prompt = config.DEFAULT_NEGATIVE_PROMPT
-    style_data = next((s for s in config.STYLES if s["name"] == style), None) if style and style != "None" else None
+    style_data = resolve_style_data(style, pm)
     if style_data:
         vid_prompt = style_data["prompt"].replace("{prompt}", vid_prompt)
         negative_prompt = config.DEFAULT_NEGATIVE_PROMPT + ", " + style_data["negative_prompt"]
+
+    if director and director != "None":
+        effective_director = director
+        if director == "Custom":
+            settings = pm.load_project_settings()
+            effective_director = settings.get("custom_director", "")
+        if effective_director:
+            vid_prompt += f". This video was directed by {effective_director}."
 
     print(f"\n🎬 === START VIDEO GENERATION (LTX) ===")
     print(f"🎬 Shot ID: {shot_id} | Type: {row['Type']}")
@@ -178,6 +298,20 @@ def generate_video_for_shot(shot_id, resolution, vocal_mode, pm, style=None):
         "cameraMotion": "none",
         "audio": "false"
     }
+
+    # --- Z-Image first frame conditioning ---
+    if generation_mode == "Z-Image First Frame":
+        print(f"🖼️ === GENERATING Z-IMAGE FIRST FRAME ===")
+        frame_path, frame_err = None, "Unknown"
+        for item in generate_zimage_first_frame(vid_prompt, shot_id, pm):
+            if isinstance(item, tuple):
+                frame_path, frame_err = item
+            else:
+                yield None, item
+        if frame_err:
+            yield None, f"Error: Z-Image failed: {frame_err}"
+            return
+        payload["imagePath"] = os.path.abspath(frame_path)
 
     if row['Type'] == "Vocal":
         vocals_path = pm.get_asset_path_if_exists("vocals.mp3")
@@ -266,87 +400,3 @@ def generate_video_for_shot(shot_id, resolution, vocal_mode, pm, style=None):
         pm.save_data()
         yield None, "Error: Completed but no valid video path returned."
 
-def advanced_batch_video_generation(mode, target_versions, resolution, vocal_mode, style, pm):
-    if pm.is_generating:
-        yield [], None, "❌ Error: A generation process is already actively running.", []
-        return
-
-    pm.stop_video_generation = False
-    pm.is_generating = True
-
-    try:
-        if pm.current_project: pm.load_project(pm.current_project)
-
-        df = pm.df
-        if df.empty:
-            yield [], None, "No shots found.", []
-            return
-
-        current_gallery = get_project_videos(pm)
-        yield current_gallery, None, f"🚀 Starting video generation ({mode})...", [item[0] for item in current_gallery]
-
-        if mode == "Generate all Action Shots":
-            shot_ids = df[df['Type'] == 'Action']['Shot_ID'].tolist()
-        elif mode == "Generate all Vocal Shots":
-            shot_ids = df[df['Type'] == 'Vocal']['Shot_ID'].tolist()
-        elif mode == "Generate Remaining Shots":
-            shot_ids = [
-                sid for sid in df['Shot_ID'].tolist()
-                if get_video_count_for_shot(sid, current_gallery) < target_versions
-            ]
-        else:
-            shot_ids = df['Shot_ID'].tolist()
-
-        for shot_id in shot_ids:
-            if pm.stop_video_generation: break
-
-            matching = df[df['Shot_ID'] == shot_id]
-            if matching.empty:
-                yield current_gallery, None, f"⚠️ Skipped {shot_id}: Not found in DataFrame.", [item[0] for item in current_gallery]
-                continue
-            row = matching.iloc[0]
-
-            if mode == "Regenerate all Shots":
-                vid_dir = pm.get_path("videos")
-                if os.path.exists(vid_dir):
-                    for f in glob.glob(os.path.join(vid_dir, f"{shot_id}_*.mp4")):
-                        try: os.remove(f)
-                        except Exception: pass
-                current_gallery = get_project_videos(pm)
-
-            if pd.isna(row.get('Video_Prompt')) or not str(row.get('Video_Prompt')).strip():
-                yield current_gallery, None, f"⚠️ Skipped {shot_id}: Missing Video Prompt.", [item[0] for item in current_gallery]
-                continue
-
-            current_count = get_video_count_for_shot(shot_id, current_gallery)
-
-            while current_count < target_versions:
-                if pm.stop_video_generation: break
-
-                new_vid_path = None
-                vid_generator = generate_video_for_shot(shot_id, resolution, vocal_mode, pm, style)
-
-                for path, msg in vid_generator:
-                    if pm.stop_video_generation: break
-                    if path is None:
-                        yield current_gallery, None, f"⏳ {shot_id} (Ver {current_count + 1}/{target_versions}): {msg}", [item[0] for item in current_gallery]
-                    else:
-                        new_vid_path = path
-
-                if pm.stop_video_generation: break
-
-                if new_vid_path:
-                    current_gallery = get_project_videos(pm)
-                    current_count += 1
-                    yield current_gallery, new_vid_path, f"✅ Finished {shot_id}", [item[0] for item in current_gallery]
-                else:
-                    yield current_gallery, None, f"❌ Failed to generate video for {shot_id}.", [item[0] for item in current_gallery]
-                    break
-
-        if pm.stop_video_generation:
-            yield current_gallery, None, "🛑 Generation Stopped by User.", [item[0] for item in current_gallery]
-        else:
-            yield current_gallery, None, "🎉 Batch Video Generation Complete.", [item[0] for item in current_gallery]
-    finally:
-        sync_video_directory(pm)
-        pm.is_generating = False
