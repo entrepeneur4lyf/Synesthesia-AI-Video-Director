@@ -11,7 +11,7 @@ import requests
 import pandas as pd
 
 import config
-from utils import get_file_path
+from utils import get_file_path, get_ltx_duration
 
 # ==========================================
 # LLM BRIDGE
@@ -159,55 +159,228 @@ class ProjectManager:
 
         try:
             new_df = pd.read_csv(get_file_path(file_obj))
-
-            if "Shot_ID" not in new_df.columns:
-                return "❌ Error: Uploaded CSV is missing the 'Shot_ID' column.", self.df
-
-            if len(new_df) != len(self.df):
-                return f"❌ Error: Uploaded CSV has {len(new_df)} rows, but current project has {len(self.df)} rows.", self.df
-
-            new_df = new_df.set_index("Shot_ID")
-            curr_df = self.df.set_index("Shot_ID")
-
-            missing_shots = set(curr_df.index) - set(new_df.index)
-            if missing_shots:
-                return f"❌ Error: CSV is missing required Shot IDs: {', '.join(str(s) for s in missing_shots)}", self.df
-
-            if 'Type' not in new_df.columns:
-                return "❌ Error: CSV is missing 'Type' column.", self.df
-
-            valid_types = {"Vocal", "Action"}
-            invalid_types = set(new_df['Type'].unique()) - valid_types
-            if invalid_types:
-                return f"❌ Error: Invalid Type values: {', '.join(map(str, invalid_types))}. Must be 'Vocal' or 'Action'.", self.df
-
-            type_changed = new_df['Type'] != curr_df['Type']
-            changed_shots = curr_df[type_changed].index.tolist()
-
-            if type_changed.any():
-                curr_df['Type'] = new_df['Type']
-
-            if 'Video_Prompt' in new_df.columns:
-                curr_df['Video_Prompt'] = new_df['Video_Prompt']
-                self.df = curr_df.reset_index()
-                self.save_data()
-                if changed_shots:
-                    return f"✅ CSV imported. Type changed for: {', '.join(map(str, changed_shots))}. Prompts updated.", self.df
-                return "✅ CSV Uploaded & Verified. Prompts successfully updated.", self.df
-            else:
-                if changed_shots:
-                    self.df = curr_df.reset_index()
-                    self.save_data()
-                    return f"✅ Type changed for: {', '.join(map(str, changed_shots))}.", self.df
-                return "❌ Error: 'Video_Prompt' column not found in uploaded CSV.", self.df
-
         except Exception as e:
             return f"❌ Error reading CSV: {e}", self.df
+
+        mode = self.load_project_settings().get("video_mode", "Intercut")
+
+        if mode == "Intercut":
+            return self._import_csv_intercut(new_df)
+        else:
+            return self._import_csv_flexible(new_df, mode)
+
+    def _import_csv_intercut(self, new_df):
+        """Import validation for Intercut mode: shot IDs and row count must match exactly."""
+        if "Shot_ID" not in new_df.columns:
+            return "❌ Error: Uploaded CSV is missing the 'Shot_ID' column.", self.df
+
+        if len(new_df) != len(self.df):
+            return f"❌ Error: Uploaded CSV has {len(new_df)} rows, but current project has {len(self.df)} rows.", self.df
+
+        new_df = new_df.set_index("Shot_ID")
+        curr_df = self.df.set_index("Shot_ID")
+
+        missing_shots = set(curr_df.index) - set(new_df.index)
+        if missing_shots:
+            return f"❌ Error: CSV is missing required Shot IDs: {', '.join(str(s) for s in missing_shots)}", self.df
+
+        if 'Type' not in new_df.columns:
+            return "❌ Error: CSV is missing 'Type' column.", self.df
+
+        valid_types = {"Vocal", "Action"}
+        invalid_types = set(new_df['Type'].unique()) - valid_types
+        if invalid_types:
+            return f"❌ Error: Invalid Type values: {', '.join(map(str, invalid_types))}. Must be 'Vocal' or 'Action'.", self.df
+
+        type_changed = new_df['Type'] != curr_df['Type']
+        changed_shots = curr_df[type_changed].index.tolist()
+
+        if type_changed.any():
+            curr_df['Type'] = new_df['Type']
+
+        if 'Video_Prompt' in new_df.columns:
+            curr_df['Video_Prompt'] = new_df['Video_Prompt']
+            self.df = curr_df.reset_index()
+            self.save_data()
+            if changed_shots:
+                return f"✅ CSV imported. Type changed for: {', '.join(map(str, changed_shots))}. Prompts updated.", self.df
+            return "✅ CSV Uploaded & Verified. Prompts successfully updated.", self.df
+        else:
+            if changed_shots:
+                self.df = curr_df.reset_index()
+                self.save_data()
+                return f"✅ Type changed for: {', '.join(map(str, changed_shots))}.", self.df
+            return "✅ No changes detected. Shot list unchanged.", self.df
+
+    def _import_csv_flexible(self, new_df, mode):
+        """Import for All Vocals, All Action, and Scripted modes.
+
+        Users may freely change shot count and durations. The Duration column
+        drives all timing — Start_Time, End_Time, and frame columns are recalculated
+        from scratch. Total duration is validated against the original audio length
+        for All Vocals and All Action, but is skipped for Scripted (which provides
+        its own audio or no audio).
+        """
+        fps = 24.0
+        original_count = len(self.df)
+
+        # --- Required columns ---
+        for col in ("Shot_ID", "Duration", "Type"):
+            if col not in new_df.columns:
+                return f"❌ Error: Uploaded CSV is missing the '{col}' column.", self.df
+
+        n = len(new_df)
+
+        # --- Shot_ID integrity: no duplicates ---
+        if new_df["Shot_ID"].duplicated().any():
+            dupes = sorted(new_df.loc[new_df["Shot_ID"].duplicated(keep=False), "Shot_ID"].unique().tolist())
+            return f"❌ Error: Duplicate Shot IDs found: {', '.join(str(s) for s in dupes)}.", self.df
+
+        # --- Shot_ID integrity: gap-free sequential S001, S002, ... ---
+        sorted_user_ids = sorted(new_df["Shot_ID"].tolist())
+        expected_ids = [f"S{i+1:03d}" for i in range(n)]
+        if sorted_user_ids != expected_ids:
+            missing = sorted(set(expected_ids) - set(sorted_user_ids))
+            extra = sorted(set(sorted_user_ids) - set(expected_ids))
+            parts = []
+            if missing:
+                parts.append(f"missing: {', '.join(missing)}")
+            if extra:
+                parts.append(f"unexpected IDs: {', '.join(extra)}")
+            return f"❌ Error: Shot IDs must be sequential with no gaps (S001, S002, …). {'; '.join(parts)}.", self.df
+
+        # --- Type validation ---
+        valid_types = {"Vocal", "Action"}
+        invalid_types = set(new_df['Type'].dropna().unique()) - valid_types
+        if invalid_types:
+            return f"❌ Error: Invalid Type values: {', '.join(map(str, invalid_types))}. Must be 'Vocal' or 'Action'.", self.df
+
+        # --- Duration validation and snapping ---
+        snapped_durations = []
+        snap_changes = []
+        for _, row in new_df.iterrows():
+            shot_id = row["Shot_ID"]
+            raw_val = row["Duration"]
+            try:
+                raw_dur = float(raw_val)
+            except (ValueError, TypeError):
+                return (
+                    f"❌ Error: Duration for {shot_id} is not a valid number ('{raw_val}'). "
+                    f"Use '.' as the decimal separator."
+                ), self.df
+
+            if raw_dur < 1.0 or raw_dur > 10.05:
+                return f"❌ Error: Duration for {shot_id} is {raw_dur}s — must be between 1 and 10 seconds.", self.df
+
+            snapped = get_ltx_duration(raw_dur)
+            if abs(snapped - raw_dur) > 0.001:
+                snap_changes.append(shot_id)
+            snapped_durations.append(snapped)
+
+        # --- Total duration check (skipped for Scripted — it manages its own audio) ---
+        if mode != "Scripted":
+            original_total = float(self.df['Duration'].sum())
+            snapped_total = sum(snapped_durations)
+            tolerance = n * 0.5
+            if abs(snapped_total - original_total) > tolerance:
+                return (
+                    f"❌ Total duration mismatch: your shots sum to {snapped_total:.2f}s "
+                    f"but the project audio is {original_total:.2f}s. "
+                    f"(Tolerance: ±{tolerance:.1f}s for {n} shots)"
+                ), self.df
+
+        # --- Default Render_Resolution: most common in existing shot list ---
+        default_res = "540p"
+        if not self.df.empty and 'Render_Resolution' in self.df.columns:
+            res_counts = self.df['Render_Resolution'].value_counts()
+            if not res_counts.empty:
+                default_res = res_counts.index[0]
+
+        has_prompt = 'Video_Prompt' in new_df.columns
+        has_lyrics = 'Lyrics' in new_df.columns
+        has_characters = 'Characters' in new_df.columns
+        has_resolution = 'Render_Resolution' in new_df.columns
+
+        # --- Recalculate all timing columns from snapped durations ---
+        new_rows = []
+        cursor = 0.0
+        for i, (snapped_dur, (_, row)) in enumerate(zip(snapped_durations, new_df.iterrows())):
+            start = cursor
+            end = cursor + snapped_dur
+            new_rows.append({
+                "Shot_ID": f"S{i+1:03d}",
+                "Type": row["Type"],
+                "Start_Time": round(start, 4),
+                "End_Time": round(end, 4),
+                "Duration": round(snapped_dur, 4),
+                "Start_Frame": int(round(start * fps)),
+                "End_Frame": int(round(end * fps)),
+                "Total_Frames": int(round(end * fps)) - int(round(start * fps)),
+                "Lyrics": row["Lyrics"] if has_lyrics else "",
+                "Video_Prompt": row["Video_Prompt"] if has_prompt else "",
+                "Characters": row["Characters"] if has_characters else "",
+                "Video_Path": "",
+                "All_Video_Paths": "",
+                "Status": "Pending",
+                "Render_Resolution": (
+                    str(row["Render_Resolution"]).strip()
+                    if has_resolution and pd.notna(row.get("Render_Resolution"))
+                    and str(row["Render_Resolution"]).strip() not in ("", "nan")
+                    else default_res
+                ),
+            })
+            cursor = end
+
+        result_df = pd.DataFrame(new_rows)
+        for col in config.REQUIRED_COLUMNS:
+            if col not in result_df.columns:
+                result_df[col] = ""
+        self.df = result_df[config.REQUIRED_COLUMNS]
+        self.save_data()
+
+        # --- Build success message ---
+        msg_parts = [f"✅ CSV imported. Shots: {original_count} → {n}."]
+        if has_prompt:
+            msg_parts.append("Prompts updated.")
+        if snap_changes:
+            msg_parts.append(f"{len(snap_changes)} duration(s) snapped to LTX-compatible values ({', '.join(snap_changes)}).")
+
+        return " ".join(msg_parts), self.df
 
     def export_csv(self):
         if not self.current_project or self.df.empty:
             return None
         return os.path.join(self.base_dir, self.current_project, "shot_list.csv")
+
+    def export_character_bibles(self):
+        if not self.current_project or not self.character_bibles:
+            return None
+        return os.path.join(self.base_dir, self.current_project, "character_bibles.csv")
+
+    def import_character_bibles(self, file_obj):
+        if file_obj is None:
+            return "❌ No file provided.", None
+        try:
+            path = file_obj.name if hasattr(file_obj, "name") else str(file_obj)
+            df = pd.read_csv(path)
+            if "character_name" not in df.columns or "description" not in df.columns:
+                return "❌ CSV must have 'character_name' and 'description' columns.", None
+            bibles = {}
+            for _, row in df.iterrows():
+                name = str(row.get("character_name", "")).strip()
+                desc = str(row.get("description", "")).strip()
+                if name and name.lower() != "nan":
+                    bibles[name] = desc
+            if not bibles:
+                return "❌ No valid entries found in CSV.", None
+            self.character_bibles = bibles
+            self.save_character_bibles()
+            self.update_characters_column()
+            self.save_data()
+            bible_df = pd.DataFrame(list(bibles.items()), columns=["character_name", "description"])
+            return f"✅ Imported {len(bibles)} character(s).", bible_df
+        except Exception as e:
+            return f"❌ Error importing bibles: {e}", None
 
     def save_data(self):
         if self.current_project:

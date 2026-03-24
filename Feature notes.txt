@@ -1,25 +1,24 @@
 Come up with a plan for the following:
 
-Que Progress updates in real time but Current render progress does not.
+We need to make some alterations to the CSV shot list upload validation to better account for the "all vocals" "all action" and "scripted" modes.
+
+In "all vocals" or "all action" mode, the user should be able to freely alter the shot lengths, number of shots, and shot type with the exception that the TOTAL length must still match the existing shot list to accommodate the audio track.  We don't want to put a heavy math burden on the user though; in order to support an easier process, the user will edit the "duration" column only.  It will be up to the import function to recalculate the start time, end time, duration, end frame and total frames.  We will also need to validate a valid duration to match our existing frame rules.  In order to do this we will snap the users selection to the nearest valid duration.
+
+"intercut" mode should keep the validations it has now in order to ensure the precise cut to singers on vocal detection.
+
+"scripted" mode validation should function like "all action" mode without the need to validate total length as LTX will provide its own audio in this mode.
+
+We probably need to add an extra validation to confirm that the user hasn't skipped any shots. 
+
+the Video_Prompt column logic (lines 190–202) is slightly inconsistent — if Video_Prompt is absent but
+  Type did change, it saves and returns success. If Video_Prompt is absent and nothing changed, it returns an error
+  rather than just a no-op success.
+
+We will also need to update the documentation in readme.md and tab 6 help to reflect these changes.
 
 Also, provide any gotcha's or additional ideas you can think of about this plan.
 
-Gotchas
 
- 1. REQUIRED_COLUMNS addition breaks existing project CSVs: Old CSVs won't have Render_Resolution. Mitigation: When load_project() calls pd.read_csv(), missing columns are filled with NaN. All
- resolution-lookup code falls back to a default gracefully. No migration needed.
- 2. assemble_cutting_room_floor clips list: It scans videos/ and cutting_room/ directories. The shot_id extraction from filenames (filename.split('_')[0]) works as long as shot IDs don't contain underscores —
-  and they don't by convention (S01, A02, etc.). Verify this assumption holds.
- 3. Settings dict — key name consistency: The dict keys in handle_save_settings must exactly match the keys read in save_global_url_settings. Use constants or document them clearly to avoid typo bugs when
- adding future settings.
- 4. _queue_est_cache is a closure variable: Defined inside build(), so it persists for the session. If the user somehow triggers two simultaneous queue processors (shouldn't happen given
- pm.queue_processor_running guard), there's a race condition. Not a real concern in practice.
- 5. NVML handle cache on GPU index change: When user changes GPU index in Tab 5 and saves, GPU_MONITOR_INDEX is updated globally. The next get_vram_usage() call will miss the cache (new index not in dict) and
-  fetch a fresh handle. Old handles for previous indices remain cached but unused — acceptable minor memory overhead (a few bytes per handle).
- 6. First-shot alert threshold (3.0x): Stricter than the ongoing per-shot threshold (2.5x) to reduce false positives on the first render. The first render is often slow due to LTX Desktop warming up or model
- loading; using 3.0x avoids crying wolf before the user has established a baseline. Consider making this a config constant FIRST_SHOT_WARN_FACTOR = 3.0.
- 7. Calibration stats refresh: The stats textbox is populated once at Tab 5 build time (value=config.get_calibration_summary()). It won't auto-update as renders complete — user must click "Refresh Stats". An
- auto-refresh every N renders would require wiring Tab 3 events to update Tab 5 components, which crosses tab boundaries and complicates the architecture. Keep manual refresh for now.
 
  ---
  Additional Ideas
@@ -31,3 +30,6 @@ Gotchas
  - Render_Resolution for Vocal shots: Vocal shots have audio attached and produce a different output resolution at the same preset (as noted in CLAUDE.md). Consider storing both the requested resolution and
  the actual output dimensions from the video file. The actual dimensions are already used during assembly (dynamically detected from the first clip) — logging them to the CSV would make cost estimates more
  accurate.
+
+
+

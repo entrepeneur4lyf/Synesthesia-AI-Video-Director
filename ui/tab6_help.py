@@ -62,7 +62,10 @@ All shot durations are automatically locked to LTX-compatible frame counts (1–
 
 **Data Management:**
 - *Export CSV* — download the full shot list with all prompts for external editing
-- *Import CSV* — upload an edited CSV to push updated `Video_Prompt` values back in (Shot IDs and Types must match exactly)
+- *Import CSV* — upload an edited CSV to push updates back in. Behaviour depends on the active mode:
+  - **Intercut:** Shot IDs and row count must match exactly. Only `Type` and `Video_Prompt` are updated.
+  - **All Vocals / All Action:** Edit the `Duration` column to redistribute shot lengths. You may add or remove shots. Total duration must remain close to the original audio length. `Type`, `Video_Prompt`, `Lyrics`, and `Characters` columns are accepted. All timing columns (`Start_Time`, `End_Time`, etc.) are recalculated automatically — do not edit them. Durations are snapped to LTX-compatible values (1–10s whole-second increments) automatically.
+  - **Scripted:** Same as All Vocals / All Action, but total duration is not validated (Scripted mode provides its own audio). Note: shots are processed in spreadsheet row order and renumbered S001, S002, … on import.
 - *Download Story (.txt)* — export every shot's prompt as a readable text file; includes a Character Bibles section at the end if bibles exist
 - *Export Bibles CSV* — download the character bible definitions (`character_name`, `description`) for external editing or cloud LLM use
 - *Import Bibles CSV* — upload an edited bibles CSV to replace the current character definitions; the Characters column in the shot table refreshes automatically

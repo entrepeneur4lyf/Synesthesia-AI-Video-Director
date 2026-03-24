@@ -284,6 +284,11 @@ def generate_story_file(pm):
         prompt = row.get("Video_Prompt", "No prompt generated.")
         story_content += f"Shot {sid}:\n{prompt}\n\n"
 
+    if pm.character_bibles:
+        story_content += "--- Character Bibles ---\n\n"
+        for name, desc in pm.character_bibles.items():
+            story_content += f"{name}\n{desc}\n\n"
+
     path = os.path.join(pm.base_dir, pm.current_project, "story.txt")
     with open(path, "w", encoding="utf-8") as f:
         f.write(story_content)

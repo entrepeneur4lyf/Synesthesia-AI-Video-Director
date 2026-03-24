@@ -33,7 +33,7 @@ Because LTX output resolutions are unpredictable, `RESOLUTION_MAP` uses standard
 ## Key Domain Concepts
 
 - **Shot Types**: "Vocal" (singing/performance) and "Action" (narrative/visual). These control prompt generation strategy and audio attachment during video generation.
-- **LTX duration snapping**: Shot durations are locked to 1-5 second increments at 24 fps for LTX compatibility.
+- **LTX duration snapping**: Shot durations are locked to 1-5 second increments at 24 fps for specific compatibility with the LTX Desktop application.  Other versions of LTX do not have this limitation.
 - **Intercut mode**: Default mode that scans vocal audio for silence gaps to create alternating Vocal/Action shots.
 - **Z-Image First Frame mode**: Before generating a video, sends the video prompt to LTX's image endpoint to produce a 1920×1080 first-frame image, then passes it as `imagePath` conditioning into the video generation call. First frames are saved to `first_frames/` and never reused.
 

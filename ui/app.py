@@ -72,23 +72,12 @@ def build_app():
         # handle_create and handle_load span Tab 1 + 2 + 3 outputs simultaneously
         # ==========================================
 
-        def handle_create(name, v_file, s_file, lyrics_text, pm):
+        def handle_create(name, pm):
             msg = pm.create_project(name)
             clean_name = pm.sanitize_name(name)
 
             if "already exists" in msg or "Invalid" in msg:
-                return msg, gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update()
-
-            if v_file:
-                v_src = get_file_path(v_file)
-                if v_src: pm.save_asset(v_src, "vocals.mp3")
-
-            if s_file:
-                s_src = get_file_path(s_file)
-                if s_src: pm.save_asset(s_src, "full_song.mp3")
-
-            if lyrics_text:
-                pm.save_lyrics(lyrics_text)
+                return msg, gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update()
 
             df = pd.DataFrame(columns=config.REQUIRED_COLUMNS)
 
@@ -102,15 +91,19 @@ def build_app():
                 "",
                 "",
                 [],
-                pd.DataFrame(columns=["character_name", "description"])
+                pd.DataFrame(columns=["character_name", "description"]),
+                None,
+                None,
+                "",
             )
 
         t1["create_btn"].click(
             handle_create,
-            inputs=[t1["proj_name"], t1["vocals_up"], t1["song_up"], t1["lyrics_in"], pm_state],
+            inputs=[t1["proj_name"], pm_state],
             outputs=[t1["proj_status"], t1["project_dropdown"], current_proj_var, t1["time_spent_disp"],
                      t2["shot_table"], t2["rough_concept_in"], t2["plot_out"], t2["performance_desc_in"],
-                     t3["vid_gallery"], t2["bible_table"]]
+                     t3["vid_gallery"], t2["bible_table"],
+                     t1["vocals_up"], t1["song_up"], t1["lyrics_in"]]
         )
 
         def handle_load(name, pm):

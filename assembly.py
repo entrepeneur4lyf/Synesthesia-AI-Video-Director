@@ -91,13 +91,16 @@ def assemble_video(full_song_path, resolution, pm, fallback_mode=False, style_fi
     for _, r in df.iterrows():
         vp = pick_vid_path(r)
         if vp and pd.notna(vp) and os.path.exists(str(vp)):
+            probe = None
             try:
                 probe = VideoFileClip(str(vp))
                 target_size = tuple(probe.size)
-                probe.close()
                 break
-            except:
+            except Exception:
                 pass
+            finally:
+                if probe is not None:
+                    probe.close()
     if target_size is None:
         target_size = config.RESOLUTION_MAP.get(resolution, (1920, 1080))
 
@@ -179,10 +182,10 @@ def assemble_video(full_song_path, resolution, pm, fallback_mode=False, style_fi
         final.close()
         if audio is not None:
             try: audio.close()
-            except: pass
+            except Exception: pass
         for c in clips_to_close:
             try: c.close()
-            except: pass
+            except Exception: pass
 
     return out_path
 
@@ -191,7 +194,7 @@ def _make_shot_label_clip(shot_id, seq_num, total_shots, size, duration, fps=24)
     font_size = max(24, h // 22)
     try:
         font = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", font_size)
-    except:
+    except Exception:
         font = ImageFont.load_default()
 
     text = f"{shot_id}  [{seq_num}/{total_shots}]"
@@ -206,7 +209,7 @@ def _make_shot_label_clip(shot_id, seq_num, total_shots, size, duration, fps=24)
     pad = 10
     box = [pad, pad, pad + tw + pad * 2, pad + th + pad * 2]
     draw.rectangle(box, fill=(0, 0, 0, 160))
-    draw.text((pad * 2, pad * 1.5), text, fill=(255, 220, 0, 255), font=font)
+    draw.text((pad * 2, int(pad * 1.5)), text, fill=(255, 220, 0, 255), font=font)
 
     arr = np.array(img)
     rgb = arr[:, :, :3]
@@ -248,13 +251,16 @@ def assemble_video_with_shot_numbers(full_song_path, resolution, pm, style_filte
     for _, r in df.iterrows():
         vp = pick_vid_path(r)
         if vp and pd.notna(vp) and os.path.exists(str(vp)):
+            probe = None
             try:
                 probe = VideoFileClip(str(vp))
                 target_size = tuple(probe.size)
-                probe.close()
                 break
-            except:
+            except Exception:
                 pass
+            finally:
+                if probe is not None:
+                    probe.close()
     if target_size is None:
         target_size = config.RESOLUTION_MAP.get(resolution, (1920, 1080))
 
@@ -328,10 +334,10 @@ def assemble_video_with_shot_numbers(full_song_path, resolution, pm, style_filte
         final.close()
         if audio is not None:
             try: audio.close()
-            except: pass
+            except Exception: pass
         for c in clips_to_close:
             try: c.close()
-            except: pass
+            except Exception: pass
 
     return out_path
 
@@ -357,13 +363,16 @@ def assemble_cutting_room_floor(full_song_path, resolution, pm, audio_mode="Atta
 
     target_size = None
     for f in all_files:
+        probe = None
         try:
             probe = VideoFileClip(f)
             target_size = tuple(probe.size)
-            probe.close()
             break
-        except:
+        except Exception:
             pass
+        finally:
+            if probe is not None:
+                probe.close()
     if target_size is None:
         target_size = config.RESOLUTION_MAP.get(resolution, (1920, 1080))
 
@@ -431,9 +440,9 @@ def assemble_cutting_room_floor(full_song_path, resolution, pm, audio_mode="Atta
         final.close()
         if audio is not None:
             try: audio.close()
-            except: pass
+            except Exception: pass
         for c in clips_to_close:
             try: c.close()
-            except: pass
+            except Exception: pass
 
     return out_path
