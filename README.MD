@@ -31,7 +31,7 @@ You will also need the following installed on your system:
 
 ## Quick Start (Windows)
 
-For Windows users who prefer not to use the command line, batch files are included:
+For Windows users who prefer not to use the command line, a single launcher batch file handles everything:
 
 1. **Clone the repository** — Open a terminal and run:
 
@@ -41,13 +41,22 @@ For Windows users who prefer not to use the command line, batch files are includ
 
    Or download and extract the ZIP from GitHub.
 
-2. **Install** — Double-click **`install.bat`**. This creates a virtual environment and installs all Python dependencies automatically.
+2. **Configure `run.bat`** — Open `run.bat` in a text editor and set the paths at the top to match your machine:
 
-3. **Run** — Double-click **`run.bat`** to start the application. The Gradio interface will open in your browser.
+   ```bat
+   set GIT_BRANCH=main
+   set LM_STUDIO_PATH=C:\Users\YourName\AppData\Local\Programs\LM Studio\LM Studio.exe
+   set LTX_DESKTOP_PATH=C:\Path\To\LTX Desktop\LTX Desktop.exe
+   ```
 
-4. **Update** — Double-click **`update.bat`** at any time to pull the latest code from GitHub and update dependencies.
+   - `GIT_BRANCH=main` tracks stable releases (latest tag). Change to `dev` to follow the development branch.
+   - Set `LM_STUDIO_PATH` and `LTX_DESKTOP_PATH` to where those apps are installed on your machine.
 
-> **Note:** Make sure Python, FFmpeg, and Git are installed and on your PATH before running the batch files (see [Prerequisites](#prerequisites)).
+3. **Run** — Double-click **`run.bat`**. On first launch it automatically creates a virtual environment and installs all Python dependencies, then starts the application. The Gradio interface will open in your browser.
+
+   On subsequent launches, `run.bat` checks for updates and prompts you to apply them before starting.
+
+> **Note:** Make sure Python, FFmpeg, and Git are installed and on your PATH before running the batch file (see [Prerequisites](#prerequisites)).
 
 ## Manual Installation (All Platforms)
 
