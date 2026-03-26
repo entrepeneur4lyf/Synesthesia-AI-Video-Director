@@ -1,0 +1,587 @@
+# Instincts generated from https://github.com/entrepeneur4lyf/Synesthesia-AI-Video-Director
+# Generated: 2026-03-26T13:12:20.578Z
+# Version: 2.0
+# NOTE: This file supplements (does not replace) any existing curated instincts.
+# High-confidence manually curated instincts should be preserved alongside these.
+
+---
+id: Synesthesia-AI-Video-Director-commit-length
+trigger: "when writing a commit message"
+confidence: 0.6
+domain: git
+source: repo-analysis
+source_repo: https://github.com/entrepeneur4lyf/Synesthesia-AI-Video-Director
+---
+
+# Synesthesia AI Video Director Commit Length
+
+## Action
+
+Write moderate-length commit messages (~60 characters)
+
+## Evidence
+
+- Average commit message length: 60 chars
+- Based on 68 commits
+
+---
+id: Synesthesia-AI-Video-Director-naming-files
+trigger: "when creating a new file"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/entrepeneur4lyf/Synesthesia-AI-Video-Director
+---
+
+# Synesthesia AI Video Director Naming Files
+
+## Action
+
+Use snake_case naming convention
+
+## Evidence
+
+- Analyzed file naming patterns in repository
+- Dominant pattern: snake_case
+
+---
+id: Synesthesia-AI-Video-Director-import-relative
+trigger: "when importing modules"
+confidence: 0.75
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/entrepeneur4lyf/Synesthesia-AI-Video-Director
+---
+
+# Synesthesia AI Video Director Import Relative
+
+## Action
+
+Use relative imports for project files
+
+## Evidence
+
+- Import analysis shows relative import pattern
+- Example: import { x } from '../lib/x'
+
+---
+id: Synesthesia-AI-Video-Director-export-style
+trigger: "when exporting from a module"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/entrepeneur4lyf/Synesthesia-AI-Video-Director
+---
+
+# Synesthesia AI Video Director Export Style
+
+## Action
+
+Prefer named exports
+
+## Evidence
+
+- Export pattern analysis
+- Dominant style: named
+
+---
+id: Synesthesia-AI-Video-Director-test-separate
+trigger: "when writing tests"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/entrepeneur4lyf/Synesthesia-AI-Video-Director
+---
+
+# Synesthesia AI Video Director Test Separate
+
+## Action
+
+Place tests in the tests/ or __tests__/ directory, mirroring src structure
+
+## Evidence
+
+- Separate test directory pattern detected
+- Tests live in dedicated test folders
+
+---
+id: Synesthesia-AI-Video-Director-workflow-feature-development
+trigger: "when implementing a new feature"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/entrepeneur4lyf/Synesthesia-AI-Video-Director
+---
+
+# Synesthesia AI Video Director Workflow Feature Development
+
+## Action
+
+Follow the feature-development workflow:
+1. Add feature implementation
+2. Add tests for feature
+3. Update documentation
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~13x per month
+- Files: **/api/**
+
+---
+id: Synesthesia-AI-Video-Director-workflow-feature-development-with-ui-and-backend
+trigger: "when doing feature development with ui and backend"
+confidence: 0.65
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/entrepeneur4lyf/Synesthesia-AI-Video-Director
+---
+
+# Synesthesia AI Video Director Workflow Feature Development With Ui And Backend
+
+## Action
+
+Follow the feature-development-with-ui-and-backend workflow:
+1. Edit or add backend logic (e.g., models.py, llm_logic.py, assembly.py, video.py, config.py, utils.py)
+2. Edit or add UI tab(s) or orchestrator (e.g., ui/tabX_*.py, ui/app.py)
+3. Update or add config/data files if needed (e.g., styles.json, render_calibration.json, global_settings.json)
+4. Update documentation (README.MD, CLAUDE.md, Feature notes.txt) if the feature is user-visible
+5. Update requirements or batch files if dependencies/scripts are affected
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~3x per month
+- Files: models.py, llm_logic.py, assembly.py
+
+---
+id: Synesthesia-AI-Video-Director-workflow-documentation-update
+trigger: "when doing documentation update"
+confidence: 0.7
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/entrepeneur4lyf/Synesthesia-AI-Video-Director
+---
+
+# Synesthesia AI Video Director Workflow Documentation Update
+
+## Action
+
+Follow the documentation-update workflow:
+1. Edit documentation file(s) (README.MD, CLAUDE.md, RELEASE_NOTES_*.md, Feature notes.txt)
+2. Commit with a message referencing the doc change or related feature/fix
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~4x per month
+- Files: README.MD, CLAUDE.md, RELEASE_NOTES_v*.md
+
+---
+id: Synesthesia-AI-Video-Director-workflow-dependency-or-install-script-update
+trigger: "when doing dependency or install script update"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/entrepeneur4lyf/Synesthesia-AI-Video-Director
+---
+
+# Synesthesia AI Video Director Workflow Dependency Or Install Script Update
+
+## Action
+
+Follow the dependency-or-install-script-update workflow:
+1. Edit requirements.txt and/or install.bat/update.bat/run.bat
+2. Update README.MD if install instructions change
+3. Commit with a message referencing dependency or install changes
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: requirements.txt, install.bat, update.bat
+
+---
+id: Synesthesia-AI-Video-Director-workflow-bugfix-or-small-improvement
+trigger: "when doing bugfix or small improvement"
+confidence: 0.7
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/entrepeneur4lyf/Synesthesia-AI-Video-Director
+---
+
+# Synesthesia AI Video Director Workflow Bugfix Or Small Improvement
+
+## Action
+
+Follow the bugfix-or-small-improvement workflow:
+1. Edit the affected code file(s) (often app.py or ui/tabX_*.py)
+2. Optionally update documentation if user-facing
+3. Commit with a message referencing the bug or fix
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~4x per month
+- Files: app.py, ui/tab1_project.py, ui/tab2_storyboard.py
+
+---
+id: Synesthesia-AI-Video-Director-workflow-release-notes-creation
+trigger: "when doing release notes creation"
+confidence: 0.55
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/entrepeneur4lyf/Synesthesia-AI-Video-Director
+---
+
+# Synesthesia AI Video Director Workflow Release Notes Creation
+
+## Action
+
+Follow the release-notes-creation workflow:
+1. Add or update RELEASE_NOTES_vX.Y.Z.md
+2. Commit with a message referencing the release version
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~1x per month
+- Files: RELEASE_NOTES_v*.md
+
+---
+id: Synesthesia-AI-Video-Director-workflow-modularization-or-refactor
+trigger: "when doing modularization or refactor"
+confidence: 0.55
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/entrepeneur4lyf/Synesthesia-AI-Video-Director
+---
+
+# Synesthesia AI Video Director Workflow Modularization Or Refactor
+
+## Action
+
+Follow the modularization-or-refactor workflow:
+1. Create new module files (e.g., move from app.py to ui/tabX_*.py, assembly.py, config.py, etc.)
+2. Update imports and orchestrator files (e.g., ui/app.py)
+3. Remove or shrink monolithic files
+4. Update documentation to reflect new structure
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~1x per month
+- Files: app.py, ui/app.py, ui/tab1_project.py
+
+---
+id: synesthesia-ai-video-director-instinct-file-naming
+trigger: "When creating or renaming a Python file"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: entrepeneur4lyf/Synesthesia-AI-Video-Director
+---
+
+# Synesthesia Ai Video Director Instinct File Naming
+
+## Action
+
+Use snake_case for file names
+
+## Evidence
+
+- Pattern in files: models.py, llm_logic.py, assembly.py, video.py, config.py, utils.py
+
+---
+id: synesthesia-ai-video-director-instinct-function-naming
+trigger: "When defining a new function"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: entrepeneur4lyf/Synesthesia-AI-Video-Director
+---
+
+# Synesthesia Ai Video Director Instinct Function Naming
+
+## Action
+
+Use camelCase for function names
+
+## Evidence
+
+- Pattern in codeStyle.namingConventions.functions
+
+---
+id: synesthesia-ai-video-director-instinct-class-naming
+trigger: "When defining a new class"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: entrepeneur4lyf/Synesthesia-AI-Video-Director
+---
+
+# Synesthesia Ai Video Director Instinct Class Naming
+
+## Action
+
+Use PascalCase for class names
+
+## Evidence
+
+- Pattern in codeStyle.namingConventions.classes
+
+---
+id: synesthesia-ai-video-director-instinct-constant-naming
+trigger: "When defining a constant"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: entrepeneur4lyf/Synesthesia-AI-Video-Director
+---
+
+# Synesthesia Ai Video Director Instinct Constant Naming
+
+## Action
+
+Use SCREAMING_SNAKE_CASE for constant names
+
+## Evidence
+
+- Pattern in codeStyle.namingConventions.constants
+
+---
+id: synesthesia-ai-video-director-instinct-import-style
+trigger: "When importing modules within the package"
+confidence: 0.85
+domain: code-style
+source: repo-analysis
+source_repo: entrepeneur4lyf/Synesthesia-AI-Video-Director
+---
+
+# Synesthesia Ai Video Director Instinct Import Style
+
+## Action
+
+Use relative imports
+
+## Evidence
+
+- Pattern in codeStyle.importStyle
+
+---
+id: synesthesia-ai-video-director-instinct-export-style
+trigger: "When exporting functions or classes from a module"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: entrepeneur4lyf/Synesthesia-AI-Video-Director
+---
+
+# Synesthesia Ai Video Director Instinct Export Style
+
+## Action
+
+Use named exports
+
+## Evidence
+
+- Pattern in codeStyle.exportStyle
+
+---
+id: synesthesia-ai-video-director-instinct-test-location
+trigger: "When adding or updating tests"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: entrepeneur4lyf/Synesthesia-AI-Video-Director
+---
+
+# Synesthesia Ai Video Director Instinct Test Location
+
+## Action
+
+Place tests in a separate test directory
+
+## Evidence
+
+- Pattern in architecture.folderStructure.testLocation
+
+---
+id: synesthesia-ai-video-director-instinct-test-pattern
+trigger: "When implementing a new feature"
+confidence: 0.7
+domain: testing
+source: repo-analysis
+source_repo: entrepeneur4lyf/Synesthesia-AI-Video-Director
+---
+
+# Synesthesia Ai Video Director Instinct Test Pattern
+
+## Action
+
+Add tests for the feature after implementation and before documentation update
+
+## Evidence
+
+- feature-development.commitSequence includes 'Add tests for feature'
+
+---
+id: synesthesia-ai-video-director-instinct-commit-format
+trigger: "When writing a commit message"
+confidence: 0.85
+domain: git
+source: repo-analysis
+source_repo: entrepeneur4lyf/Synesthesia-AI-Video-Director
+---
+
+# Synesthesia Ai Video Director Instinct Commit Format
+
+## Action
+
+Use a short, descriptive message summarizing the change; include file or feature if relevant
+
+## Evidence
+
+- Example commits: 'Add 10s shot support, fix Z-Image ETA model, fix Tab 4 race condition'
+- 'Update README Quick Start to reflect consolidated run.bat'
+
+---
+id: synesthesia-ai-video-director-instinct-merge-branch
+trigger: "When merging a feature or fix branch"
+confidence: 0.9
+domain: git
+source: repo-analysis
+source_repo: entrepeneur4lyf/Synesthesia-AI-Video-Director
+---
+
+# Synesthesia Ai Video Director Instinct Merge Branch
+
+## Action
+
+Use 'Merge pull request #[number] from [branch]' in the commit message
+
+## Evidence
+
+- Example commits: 'Merge pull request #10 from RowanUnderwood/dev'
+- 'Merge pull request #9 from RowanUnderwood/dev'
+
+---
+id: synesthesia-ai-video-director-instinct-feature-dev
+trigger: "When adding a new user-facing feature or significant capability"
+confidence: 0.95
+domain: workflow
+source: repo-analysis
+source_repo: entrepeneur4lyf/Synesthesia-AI-Video-Director
+---
+
+# Synesthesia Ai Video Director Instinct Feature Dev
+
+## Action
+
+Edit or add backend logic, update/add UI tabs, update/add config/data files, update documentation if user-visible, update requirements/scripts if needed
+
+## Evidence
+
+- feature-development-with-ui-and-backend workflow
+- Example files: models.py, ui/tabX_*.py, styles.json, README.MD
+
+---
+id: synesthesia-ai-video-director-instinct-doc-update
+trigger: "When updating user or developer documentation after code/process changes"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: entrepeneur4lyf/Synesthesia-AI-Video-Director
+---
+
+# Synesthesia Ai Video Director Instinct Doc Update
+
+## Action
+
+Edit documentation files and commit with a message referencing the doc change or related feature/fix
+
+## Evidence
+
+- documentation-update workflow
+- Example files: README.MD, CLAUDE.md, RELEASE_NOTES_v*.md
+
+---
+id: synesthesia-ai-video-director-instinct-deps-update
+trigger: "When fixing install issues, pinning dependencies, or updating install/launch scripts"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: entrepeneur4lyf/Synesthesia-AI-Video-Director
+---
+
+# Synesthesia Ai Video Director Instinct Deps Update
+
+## Action
+
+Edit requirements.txt and/or install/update/run scripts, update README.MD if install instructions change, commit referencing dependency/install changes
+
+## Evidence
+
+- dependency-or-install-script-update workflow
+- Example files: requirements.txt, install.bat, run.bat, README.MD
+
+---
+id: synesthesia-ai-video-director-instinct-bugfix
+trigger: "When fixing a bug or minor issue"
+confidence: 0.95
+domain: workflow
+source: repo-analysis
+source_repo: entrepeneur4lyf/Synesthesia-AI-Video-Director
+---
+
+# Synesthesia Ai Video Director Instinct Bugfix
+
+## Action
+
+Edit the affected code file(s), optionally update documentation if user-facing, commit with a message referencing the bug or fix
+
+## Evidence
+
+- bugfix-or-small-improvement workflow
+- Example files: app.py, ui/tabX_*.py, README.MD
+
+---
+id: synesthesia-ai-video-director-instinct-release-notes
+trigger: "When preparing or publishing a new release"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: entrepeneur4lyf/Synesthesia-AI-Video-Director
+---
+
+# Synesthesia Ai Video Director Instinct Release Notes
+
+## Action
+
+Add or update RELEASE_NOTES_vX.Y.Z.md and commit with a message referencing the release version
+
+## Evidence
+
+- release-notes-creation workflow
+- Example files: RELEASE_NOTES_v*.md
+
+---
+id: synesthesia-ai-video-director-instinct-refactor
+trigger: "When reorganizing the codebase for scalability or clarity"
+confidence: 0.85
+domain: workflow
+source: repo-analysis
+source_repo: entrepeneur4lyf/Synesthesia-AI-Video-Director
+---
+
+# Synesthesia Ai Video Director Instinct Refactor
+
+## Action
+
+Create new module files, update imports/orchestrator files, remove or shrink monolithic files, update documentation to reflect new structure
+
+## Evidence
+
+- modularization-or-refactor workflow
+- Example files: app.py, ui/tabX_*.py, assembly.py, config.py, README.MD
+
